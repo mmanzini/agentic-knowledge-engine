@@ -111,6 +111,26 @@ Then proceed.
    against `log.tsv`. Any folder with zero `status=kept` rows is
    *never-consolidated* and must be processed this run — log absence
    means "hasn't started", not "already done".
+
+   **Path-granularity rule.** Log entries are timestamped exact-path
+   records — an entry for `Resources/X/` records what existed at that
+   moment, not what lives there permanently. Two checks apply to every
+   resource item:
+
+   1. **Path coverage** — does the item's own path (or an ancestor
+      path) appear in the log with `status=kept`? If not, it is virgin.
+   2. **Freshness** — even if covered, are there files inside this path
+      whose git commit date is newer than the log entry's timestamp? If
+      so, they contain new content and must be re-examined as new
+      sources. Run `git log --since="<log-timestamp>" -- <path>` to
+      surface them. A sibling/parent log entry never covers new children
+      added after it. **Extant-only:** `git log --since` also lists files
+      whose only post-timestamp commit was their *deletion* — intersect
+      with files still on disk and drop the rest; a gone file is not fresh.
+
+   **Scope comes from evidence, not memory.** Always derive virgin/fresh
+   scope from `log.tsv` + `git`, never from recalled prior runs. Recall
+   informs *routing*, not *scope* — run the scan every time.
 2. For every remaining source file, pick the best-fit **bucket(s)**
    by comparing content against each
    `Intelligence/<bucket>/_master-index.md` Scope paragraph.
