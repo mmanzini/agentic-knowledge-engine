@@ -78,26 +78,12 @@ bodies last.
    than 5 article bodies, surface that to the user before
    continuing — usually the question is too broad or the buckets
    are mis-cut.
-8. **Recall.** Also consult `Intelligence/_episodes/_index.md` and
-   perform **Recall** (the recall step in *Episodic memory* below):
-   match the question's tags against the kind indexes and pull at most
-   `k = 3` exemplar episode bodies + `reflections.md` *only when they
-   match*; skip `distilled` episodes. Pure-technical questions read the
-   router but pull no episode bodies.
-
-**Personal context auto-pull.** `query`-style walks aren't only
-triggered by explicit user questions. When the task at hand is
-**generative and personal-context-relevant** — drafting prose,
-writing a post or an email, designing user-facing copy, deciding
-tone, or making a choice where the user's preferences matter — the
-agent walks `Intelligence/personal/` **and** the `_episodes/life` +
-`_episodes/signals` kinds *before generating*, if those exist. Signal
-episodes carry stated preferences; life episodes carry past days as
-context. The trigger is the task type, not the user's wording.
-For purely technical or reference work (debugging, code reading,
-"how does library X behave"), skip the personal bucket entirely.
-The bucket's `_master-index.md` Scope paragraph is the routing
-signal — read it first if unsure.
+A `personal` bucket (if your vault has one) needs no special handling:
+its `index.md` description carries the routing signal — walked when the
+task is generative or personal-context-relevant, skipped for pure
+tech/reference work — so step 2 routes there normally. Recall (see
+*Episodic memory*) runs on every verb and tag-matches `life`/`signals`
+episodes when a generative/personal task calls for them.
 
 ---
 
@@ -326,9 +312,9 @@ buckets — **bodies last, hard budget**:
 Inject both into the run as guidance — "last time I saw input like
 this, here's what I did and what happened." Recall cost is bounded
 (≈ router + kind-index + ≤3 bodies + reflections), not growing with
-the store. For generative/personal tasks, the **Personal context
-auto-pull** additionally consults `_episodes/life` and
-`_episodes/signals` alongside the `personal/` bucket.
+the store. For generative/personal tasks, recall's tag-match naturally
+surfaces the relevant `life`/`signals` episodes — no separate mechanism;
+the `personal` bucket itself is reached by the normal `query` walk.
 
 ### Capture (run-end + inline)
 
