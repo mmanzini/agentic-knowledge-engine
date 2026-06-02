@@ -145,22 +145,16 @@ Then proceed.
    - `false` → leave in place.
    - On any failure for that file, leave in place regardless and
      log `status=crashed` with the error in `notes`.
-10. **Auto-chain `refine`.** After consolidate finishes, immediately
-    run `refine` (see below) and surface its drift-count delta vs
-    the previous `refine_summary` row in the same run report.
+10. **Auto-chain.** After consolidate finishes, run `refine` then
+    `reflect` (see *Orchestration rules*); surface refine's drift-count
+    delta in the run report.
 
-**Per-bucket workers.** One worker per bucket. Each worker enters its
-bucket, scores candidate sources, and writes articles + topic indexes
-inside that bucket only. Workers return row data and a list of
-touched paths to the orchestrator. The orchestrator is the sole
-writer of `Intelligence/index.md`, `Intelligence/log.tsv`,
-`Intelligence/_unsorted/`, and `Intelligence/_eval/results.tsv` —
-this is hard rule 8 in `schema.md`.
-
-If the runtime supports parallel subagents, run the per-bucket
-workers in parallel. Otherwise process buckets sequentially in one
-process. Either path obeys hard-rule 8; parallelism is an
-optimisation, not a correctness requirement.
+**Per-bucket workers.** One worker per bucket, run in parallel if the
+runtime supports it, otherwise sequentially (an optimisation, not a
+correctness requirement). Each writes only inside its own bucket and
+returns row data + touched paths to the orchestrator; the orchestrator
+is the sole writer of the shared files — see *Orchestration rules*
+(hard rule 8).
 
 **Prescriptive sources (`Resources/personal/`).** Sources in
 `Resources/personal/` (e.g. `about-me.md`, `writing-rules.md`) are
@@ -180,19 +174,9 @@ cite flow.
 Read-only audit. **Report findings; do not change anything.** Per
 bucket, in parallel; one orchestrator-written summary row.
 
-Cover (these are the components of the **drift count** — see
-`schema.md`):
-
-- **Orphan articles** — zero inbound `[[wiki links]]` from other
-  articles in the bucket.
-- **Index mismatches** — `_index.md`, `_master-index.md`, or
-  `index.md` entries that don't resolve, or files on disk not
-  listed in their parent index.
-- **Broken `![[...]]` embeds** — image references that don't
-  resolve in the same topic folder.
-- **Cross-bucket wiki links** — hard rule 2 violations.
-- **Schema violations** — articles missing required sections, or
-  factual claims without `(source: ...)` citations.
+Audit the **drift-count** components defined in `schema.md` *Drift
+count* (orphans, index mismatches, broken embeds, cross-bucket links,
+schema violations, episode integrity) and sum them into `drift=<N>`.
 
 Also report (do not count toward drift; track separately in `notes`):
 
@@ -214,11 +198,9 @@ Append one summary row per run to `log.tsv` with
 `status=refine_summary`, `notes` including
 `drift=<N>` plus a brief breakdown.
 
-**Advance-on-improvement.** The orchestrator compares this run's
-drift to the previous `refine_summary` row and labels the run
-**advance** / **hold** / **regress** in the user-facing report.
-Never silently undo work — surface the regression and let the human
-decide.
+Label the run **advance/hold/regress** per *Orchestration rules*
+(comparing the prior `refine_summary` drift). Never silently undo work
+— surface a regression for the human to decide.
 
 ---
 
@@ -231,26 +213,19 @@ to `_eval/results.tsv`, and produce a summary.
 1. Read `Intelligence/_eval/questions.md` and parse the question
    list (each has an ID, prompt, and target hint).
 2. For each question:
-   a. Run the `query` verb on the prompt. **Count `files_read` as
-      article-body reads only** — do not count `index.md`,
-      `_master-index.md`, or `_index.md` reads. Those are routing
-      overhead, not retrieval cost.
-   b. Self-judge `answer_quality` against the question's intent:
-      - `good` — answer is complete and well-cited.
-      - `partial` — answer is on-target but missing detail or
-        forced to lean on a `(source: needs-verification)` claim.
-      - `poor` — answer is vague, mis-routed, or contradicts the
-        sources.
-      - `missing` — no relevant article exists; the wiki can't
-        answer this yet.
-   c. Append a row to `Intelligence/_eval/results.tsv` per the
-      schema in `schema.md`.
+   a. Run the `query` verb on the prompt. Log per the `results.tsv`
+      schema in `schema.md`: `files_read` counts article bodies only
+      (`index.md`/`_master-index.md`/`_index.md` reads are routing
+      overhead, not retrieval cost).
+   b. Self-judge `answer_quality` (`good`/`partial`/`poor`/`missing`):
+      complete+well-cited / on-target-but-thin or leaning on
+      `needs-verification` / vague-or-mis-routed / no-article-exists.
+   c. Append a row to `Intelligence/_eval/results.tsv` per `schema.md`.
 3. Append a single `status=eval_summary` row to `log.tsv` with
    `notes` including `total_files_read=<N>` and a quality breakdown
    (e.g. `quality=2g/2p/1m`).
-4. Compare to the previous `eval_summary` row (if any) and label
-   the run **advance** (total_files_read down, or quality up with
-   files_read flat), **hold**, or **regress**.
+4. Label the run **advance/hold/regress** per *Orchestration rules*
+   (comparing the prior `eval_summary` `total_files_read`).
 
 `evaluate` is read-only against the wiki — the only writes are to
 `log.tsv` and `_eval/results.tsv`, both orchestrator-written.
@@ -272,9 +247,9 @@ recall/capture mechanics are described in *Episodic memory* below.
 4. Append a `reflect_summary` row to `log.tsv` with
    `episodes=<N> reflections=<N>`.
 
-**Auto-chain:** `consolidate` → `refine` → `reflect`. Run `reflect`
-after `refine` so each consolidation's experience is distilled while
-fresh. `reflect` never edits `CLAUDE.md` or `schema.md`.
+Runs last in the `consolidate → refine → reflect` auto-chain
+(*Orchestration rules*), so each consolidation's experience is distilled
+while fresh. Never edits `CLAUDE.md` or `schema.md`.
 
 ---
 
@@ -336,9 +311,7 @@ the `personal` bucket itself is reached by the normal `query` walk.
 Episodes and reflections **feed run context only**. The loop **never**
 edits `CLAUDE.md` or `schema.md` — those stay bedrock. The only place
 the agent "writes its learning" is `_episodes/` (and `reflections.md`
-within it). The orchestrator is the **sole writer** of `_episodes/`
-(hard rule 8); per-bucket workers may emit episode row data, the
-orchestrator appends.
+within it); the orchestrator is its sole writer (*Orchestration rules*).
 
 ## Orchestration rules
 
@@ -346,14 +319,15 @@ orchestrator appends.
   parallel if the runtime supports it, otherwise sequentially),
   collects their reports, and is the **sole writer** of
   `Intelligence/index.md`, `Intelligence/log.tsv`,
-  `Intelligence/_unsorted/`, and `Intelligence/_eval/results.tsv`.
+  `Intelligence/_unsorted/`, `Intelligence/_eval/results.tsv`, and
+  `Intelligence/_episodes/`.
 - **Worker scope.** A worker assigned to bucket `X` writes
   **only** inside `Intelligence/X/`. Any attempt to write outside
   is a hard-rule-8 violation and aborts the worker.
-- **Auto-chain.** `consolidate` → `refine` always. `evaluate` runs
-  on user request and is recommended after any structurally
-  significant `consolidate` (new bucket touched, >3 articles
-  written) so the read-cost trajectory stays visible.
+- **Auto-chain.** `consolidate` → `refine` → `reflect`, always, in that
+  order. `evaluate` runs on user request and is recommended after any
+  structurally significant `consolidate` (new bucket touched, >3
+  articles written) so the read-cost trajectory stays visible.
 - **Run summary format.** Every run report ends with one line:
   `run=<verb> advance|hold|regress drift=<N> Δdrift=<±N>` (for
   `refine`/`consolidate`) or `total_files_read=<N> quality=<...>`
