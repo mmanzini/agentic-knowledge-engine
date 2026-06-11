@@ -4,3 +4,6 @@
 # Obsidian workspace (local only)
 .obsidian/workspace
 .obsidian/workspace.json
+
+# Search index build artifact (rebuilt locally)
+Intelligence/_search/index.db

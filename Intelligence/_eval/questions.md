@@ -150,6 +150,43 @@ cost). `recall_reads > 3` is a budget regression.
 
 **Expected file_read budget:** 0 article bodies; `recall_reads` ≤ 2.
 
+### q9 — fuzzy phrasing, tier-2 search expected (TEMPLATE)
+
+**Prompt:** *Replace this with a question about real wiki content,
+worded so it shares NO key terms with the relevant index one-liners.*
+Example for the placeholder buckets: "Why do big groups slow down
+delivery?" (target article says "coordination overhead in software
+teams" — zero word overlap).
+
+**Target:** any single article, reached **via tier 2**. Tests the
+hybrid-search fallback: the tier-1 walk should miss or stall (the
+phrasing matches no index description), the agent should then run
+`Intelligence/_search/search.py`, follow the pointer, read the
+article, and cite it normally.
+
+**What this tests:** that semantically-phrased questions no longer
+dead-end. A `good` answer cites the target article; answering
+"not in the wiki" when the article exists is a `missing` —
+that was the pre-search failure mode.
+
+**Tracking:** in `_eval/results.tsv` `notes`, record
+`tier_used=<0|1|2>`. For this question `tier_used=2` is expected;
+`tier_used=1` with a correct answer is fine too (better routing than
+predicted), but record it.
+
+**Expected file_read budget:** 1 article body (the search call
+itself costs 0).
+
+### q10 — fuzzy phrasing, second target (TEMPLATE)
+
+**Prompt:** *Same shape as q9, different bucket — keeps tier-2
+coverage honest across the taxonomy.* Example: "What stops old
+access keys from getting cleaned up?" (target article frames it as
+"credential rotation" and "political blockers").
+
+**Target / tracking / budget:** as q9 (`tier_used=` in notes,
+1 article body).
+
 ## How to add a question
 
 1. Append a new section here with an ID (`q6`, `q7`, …), a prompt,

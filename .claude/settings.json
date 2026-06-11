@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/Intelligence/_episodes/snapshot.md\"; if [ -f \"$f\" ]; then jq -n --rawfile s \"$f\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$s}}'; fi"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/capture-session.sh\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}
