@@ -51,6 +51,38 @@ vault/
             └── image.png      # images live beside their article
 ```
 
+At a glance, information moves through three flows — how knowledge gets
+**stored**, what gets **injected** at the start of every session, and
+how old knowledge is **recalled** on demand:
+
+```mermaid
+flowchart TB
+    subgraph store ["STORE — how knowledge gets saved"]
+        direction LR
+        A["signals & sessions<br/>auto-capture skill + SessionEnd hook"] --> B["Resources/<br/>raw, immutable"]
+        B --> C["consolidate<br/>route by content, write, cite, log"]
+        C --> D["Intelligence/ articles<br/>+ indexes + log.tsv"]
+        C --> E["_episodes/<br/>operational, life, signals"]
+        E --> F["reflect: reflections.md<br/>+ snapshot.md + search index"]
+    end
+    subgraph inject ["INJECT — fixed cost at start, bounded by design"]
+        direction LR
+        G["session starts"] --> H["snapshot.md injected by hook<br/>tier 0, ≤1,500 tokens"]
+        I["verb run starts"] --> J["episodic recall<br/>≤3 episode bodies + reflections.md"]
+    end
+    subgraph recall ["RECALL — on demand, cheapest first"]
+        direction LR
+        K["question"] --> L{"snapshot<br/>answers?"}
+        L -- "yes: zero reads" --> M["answer, citing the<br/>articles it names"]
+        L -- no --> N["tier-1 index walk"]
+        N -- miss --> O["tier-2 hybrid search<br/>pointers only"]
+        N --> P["read + cite article bodies"]
+        O --> P
+    end
+    store -.->|"feeds"| inject
+    inject -.->|"primes"| recall
+```
+
 ### Two kinds of memory
 
 `Intelligence/` holds **semantic** memory — the buckets are facts:
@@ -84,6 +116,20 @@ plus an optional `SessionEnd` hook (deterministic — see *Setup*) both
 drop signals into `Resources/context/` for the normal `consolidate`
 pipeline.
 
+The fallback chain, end to end:
+
+```mermaid
+flowchart TD
+    Q["question"] --> T0{"tier 0 — snapshot<br/>already in context:<br/>does it answer?"}
+    T0 -- "yes — zero file reads" --> A["answer directly,<br/>cite the articles it names"]
+    T0 -- no --> T1["tier 1 — index walk<br/>index.md → _master-index.md →<br/>topic _index.md → ≤5 article bodies"]
+    T1 -- hit --> C["cited answer:<br/>(source: path) per claim"]
+    T1 -- "miss / fuzzy phrasing" --> T2["tier 2 — hybrid search<br/>FTS5 keyword + local embeddings,<br/>RRF-merged"]
+    T2 -- "pointers — never citable text" --> R["open and read<br/>the pointed articles"]
+    R --> C
+    T2 -- "still nothing" --> H["say the answer is not<br/>in the wiki — never invent"]
+```
+
 ### Two layers inside `Intelligence/`
 
 | Layer | Who creates it | Rule |
@@ -103,6 +149,20 @@ Four core verbs — `query`, `consolidate`, `refine`, `evaluate` — plus
 `reflect`, which maintains episodic memory. **Every run is recall → act
 → capture:** the agent recalls relevant past episodes before acting and
 writes a new episode after, so experience accumulates across runs.
+
+The write side runs as one auto-chain — every consolidate is audited,
+distilled, and re-indexed before it is committed:
+
+```mermaid
+flowchart LR
+    REC["recall<br/>≤3 episodes +<br/>reflections.md"] --> CON["consolidate<br/>route + write<br/>+ log"]
+    CON --> REF["refine<br/>read-only audit<br/>drift=N"]
+    REF --> RFL["reflect<br/>distil episodes,<br/>regenerate snapshot.md"]
+    RFL --> IDX["rebuild _search/<br/>index (incremental)"]
+    IDX --> GIT["git commit"]
+    CON -.->|"captures"| EP["_episodes/<br/>operational, life, signals"]
+    EP -.->|"next run"| REC
+```
 
 ### `query`
 
