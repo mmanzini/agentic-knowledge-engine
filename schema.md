@@ -33,15 +33,15 @@ These are non-negotiable. A run that violates any of them is a bug.
 3. **No silent bucket creation.** Sources matching no existing bucket
    go to `Intelligence/_unsorted/` and surface in the run report.
 4. **Topic creation is allowed and expected.** When no existing topic
-   in the chosen bucket fits, create one with its `_index.md` and
-   register it in the bucket's `_master-index.md`.
+   in the chosen bucket fits, create one with its `index.md` and
+   register it in the bucket's `index.md`.
 5. **Images live with their articles.** Every `![[...]]` embed must
    resolve to a file in the same topic folder. No cross-folder image
    references. Duplicating an article into two buckets means copying
    the image into each.
 6. **Indexes and log stay in sync, every run.** A `consolidate` that
-   touches a bucket must update the topic's `_index.md` (always), the
-   bucket's `_master-index.md` (if a topic was created), and
+   touches a bucket must update the topic's `index.md` (always), the
+   bucket's `index.md` (if a topic was created), and
    `Intelligence/log.tsv` (always — one append per processed source).
    `Intelligence/index.md` only changes on first-touch of a bucket.
    The `query` verb relies on these indexes being truthful — stale
@@ -96,7 +96,7 @@ The two flags are independent:
 - Default if either field is missing: `include_in_consolidation: true`,
   `delete_after_consolidation: true`.
 
-### `Intelligence/<bucket>/_master-index.md`
+### `Intelligence/<bucket>/index.md` (bucket router)
 
 ```markdown
 # <Bucket name>
@@ -107,11 +107,11 @@ allocating new articles.
 
 ## Topics
 
-- [[<topic>/_index|Topic Title]] — one-line description of the topic cluster
+- [[<topic>/index|Topic Title]] — one-line description of the topic cluster
 - ...
 ```
 
-### `Intelligence/<bucket>/<topic>/_index.md`
+### `Intelligence/<bucket>/<topic>/index.md` (topic router)
 
 ```markdown
 # <Topic name>
@@ -125,7 +125,7 @@ One paragraph describing what this topic clusters.
 
 ## Related Topics
 
-- [[../<other-topic>/_index|Other Topic]] — one-line description
+- [[../<other-topic>/index|Other Topic]] — one-line description
 - ...
 ```
 
@@ -214,8 +214,7 @@ your own vocabulary that fits your buckets. A reasonable starter set:
 | `digest` | date-keyed daily/periodic summaries |
 | `profile` | identity / personal-context articles |
 
-`consolidate` defaults `type` from the bucket (map your buckets to types
-in `Intelligence/_export/okf_common.py`), and may override per-article
+`consolidate` defaults `type` from the bucket (default per the table above), and may override per-article
 when a more specific type fits. An unrecognised `type` value is not a
 drift violation (OKF treats it as an opaque facet).
 
@@ -322,7 +321,7 @@ timestamp	question_id	files_read	answer_quality	notes
 - `question_id` — `q1`, `q2`, …, matching IDs in
   `_eval/questions.md`.
 - `files_read` — integer count of files the agent had to `Read` to
-  answer (excludes `index.md`, `_master-index.md`, and `_index.md`
+  answer (excludes `index.md` router reads at any level
   reads — those are routing overhead, not retrieval cost). The
   primary metric — the closest analog to autoresearch's `val_bpb`.
   Lower is better.
@@ -345,10 +344,10 @@ A single integer. Sum of:
 
 - **Orphans** — articles with zero inbound `[[wiki links]]` from
   other articles in their bucket (excluding the topic's own
-  `_index.md` listing).
-- **Index mismatches** — entries in any `_index.md`,
-  `_master-index.md`, or `index.md` that don't resolve to a real
-  file, or files on disk not listed in the relevant index.
+  `index.md` listing).
+- **Index mismatches** — entries in any `index.md` router (bucket or
+  topic) that don't resolve to a real file, or files on disk not
+  listed in the relevant index.
 - **Broken embeds** — `![[image.ext]]` references that don't resolve
   in the same topic folder.
 - **Cross-bucket links** — any `[[wiki link]]` that crosses bucket

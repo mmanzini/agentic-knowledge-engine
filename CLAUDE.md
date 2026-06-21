@@ -13,7 +13,7 @@ improve agent behaviour; never edit `schema.md` mid-run.
 - **`Intelligence/`** — the wiki. Long-term memory, agent-maintained.
   Two layers inside it:
   - **Buckets** (`Intelligence/<bucket>/`) — **user-curated** macro
-    groups. Each has a `_master-index.md` declaring its scope. The
+    groups. Each has a `index.md` declaring its scope. The
     agent **never** invents a new bucket; quarantine to `_unsorted/`
     instead.
   - **Topics** (`Intelligence/<bucket>/<topic>/`) — **agent-curated**
@@ -59,10 +59,13 @@ pipeline.
 
 ## Verbs
 
-The vault has six verbs: **`query`** (read), **`consolidate`**
+The vault has five verbs: **`query`** (read), **`consolidate`**
 (write from `Resources/`), **`refine`** (audit, read-only),
-**`evaluate`** (measure), **`reflect`** (maintain episodic
-memory), and **`export`** (emit an OKF bundle). Schemas, hard rules,
+**`evaluate`** (measure), and **`reflect`** (maintain episodic
+memory). Each bucket is its own in-place OKF bundle (per-article
+`type` frontmatter + a `related:` graph + a derived `log.md`), so a
+bucket's GitHub mirror is a conformant bundle with no export step.
+Schemas, hard rules,
 log/eval formats, and the drift-count definition all live in
 `schema.md`. The recall/capture mechanics that wrap every verb live in
 the **Episodic memory** section below.
@@ -80,16 +83,16 @@ Otherwise run the walk below (tier 1), falling back to hybrid search
 
 1. **Start at `Intelligence/index.md`.** Learn which buckets exist.
 2. **Pick the bucket(s).** Match against the one-line bucket
-   descriptions and, if needed, the bucket's `_master-index.md`
+   descriptions and, if needed, the bucket's `index.md`
    Scope paragraph. If no bucket fits, say so and stop. Don't
    guess into `_unsorted/` — it's a quarantine, not a search target
    unless the user explicitly asks.
 3. **Pick the topic(s) within the chosen bucket(s).** Read the
-   bucket's `_master-index.md` Topics list and, if disambiguation is
-   needed, the candidate topics' `_index.md` description paragraphs.
+   bucket's `index.md` Topics list and, if disambiguation is
+   needed, the candidate topics' `index.md` description paragraphs.
    **Do not load article bodies yet.**
 4. **Read articles.** Within the chosen topic(s), use the topic
-   `_index.md` Articles list (each article has a one-line
+   `index.md` Articles list (each article has a one-line
    description) to pick which article files to actually read.
    Pull only those. The topic's `Related Topics` block tells you
    where to step sideways within the same bucket.
@@ -102,7 +105,7 @@ Otherwise run the walk below (tier 1), falling back to hybrid search
    it came from, in the same `(source: <path>)` form articles use
    internally.
 7. **Budget.** Default ceiling: one `index.md` + one or two
-   `_master-index.md` + a handful of `_index.md` + the article
+   `index.md` + a handful of topic `index.md` + the article
    bodies actually needed. If a question seems to require more
    than 5 article bodies, surface that to the user before
    continuing — usually the question is too broad or the buckets
@@ -173,19 +176,19 @@ Then proceed.
    informs *routing*, not *scope* — run the scan every time.
 2. For every remaining source file, pick the best-fit **bucket(s)**
    by comparing content against each
-   `Intelligence/<bucket>/_master-index.md` Scope paragraph.
+   `Intelligence/<bucket>/index.md` Scope paragraph.
    - No bucket fits → write the article into
      `Intelligence/_unsorted/`, append a row with
      `status=quarantined` to `log.tsv`, and flag it in the run
      report. **Never silently invent a bucket.**
    - Two or more buckets fit → write the article into each, with
      images copied into each per `schema.md` *Image handling*.
-   - Article already in the target topic's `_index.md` → skip. (Log
+   - Article already in the target topic's `index.md` → skip. (Log
      absence is **not** a skip signal — see step 1.)
 3. Within the chosen bucket, pick the best-fit **topic** by
-   comparing content against each `<topic>/_index.md` description.
+   comparing content against each `<topic>/index.md` description.
    No topic fits → **create a new topic folder** with its
-   `_index.md` and add it to the bucket's `_master-index.md`.
+   `index.md` and add it to the bucket's `index.md`.
 4. Write or update the article using the *Article schema* from
    `schema.md`. Copy any referenced images into the topic folder.
    **Frontmatter (OKF):** open every written/updated article with the
@@ -202,9 +205,9 @@ Then proceed.
    same-bucket (hard rule 2); `related:`/relative paths **may** cross
    buckets (the portable OKF graph). When updating an existing article,
    add the new inbound `related:`/Related entry on the other side too.
-5. Update the topic's `_index.md` (add the article, refresh
+5. Update the topic's `index.md` (add the article, refresh
    `Related Topics` if needed).
-6. Update the bucket's `_master-index.md` if a new topic was
+6. Update the bucket's `index.md` if a new topic was
    created.
 7. Update `Intelligence/index.md` only if a bucket was first-touched
    (rare).
@@ -219,11 +222,17 @@ Then proceed.
    - `false` → leave in place.
    - On any failure for that file, leave in place regardless and
      log `status=crashed` with the error in `notes`.
-10. **Auto-chain.** After consolidate finishes, run `refine` then
-    `reflect` (see *Orchestration rules*); surface refine's drift-count
-    delta in the run report. After refine, rebuild the tier-2 search
-    index (`python3 Intelligence/_search/build_index.py` — incremental,
-    cheap) so search never goes stale silently.
+10. **Auto-chain.** After consolidate finishes:
+    - **Refresh each touched bucket's in-place OKF `log.md`:**
+      `python3 Intelligence/_search/okf_tools.py --log <bucket> [<bucket> …]`
+      (derived from `log.tsv`) — this is what makes the live bucket a
+      self-describing OKF bundle its mirror publishes; there is no
+      separate export step.
+    - Run `refine` then `reflect` (see *Orchestration rules*); surface
+      refine's drift-count delta in the run report.
+    - Rebuild the tier-2 search index
+      (`python3 Intelligence/_search/build_index.py` — incremental,
+      cheap) so search never goes stale silently.
 
 **Per-bucket workers.** One worker per bucket, run in parallel if the
 runtime supports it, otherwise sequentially (an optimisation, not a
@@ -266,11 +275,11 @@ Also report (do not count toward drift; track separately in `notes`):
   criterion: *equal information content + simpler structure = win*.
 - **Topic obesity** — any topic whose folder contains more than 25
   article files. List as `split_candidate=<bucket>/<topic>:<count>`
-  in `notes`. The topic's `_index.md` becomes too long to serve its
+  in `notes`. The topic's `index.md` becomes too long to serve its
   routing purpose at that size; flag for human decision (split into
   sibling topics or accept the cost).
 - **OKF conformance** — run
-  `python3 Intelligence/_export/export_okf.py --check` (whole-wiki, no
+  `python3 Intelligence/_search/okf_tools.py --check` (whole-wiki, no
   write) and note `okf=conformant` or `okf=<N>-violations` with a short
   breakdown (articles missing `type`, unresolved `related:`/relative
   links). Report only — the missing-`type` case already counts once
@@ -302,7 +311,7 @@ to `_eval/results.tsv`, and produce a summary.
 2. For each question:
    a. Run the `query` verb on the prompt. Log per the `results.tsv`
       schema in `schema.md`: `files_read` counts article bodies only
-      (`index.md`/`_master-index.md`/`_index.md` reads are routing
+      (`index.md` router reads at any level are routing
       overhead, not retrieval cost).
    b. Self-judge `answer_quality` (`good`/`partial`/`poor`/`missing`):
       complete+well-cited / on-target-but-thin or leaning on
@@ -349,41 +358,6 @@ while fresh. Never edits `CLAUDE.md` or `schema.md`.
 
 ---
 
-### `export`
-
-Emit a portable **OKF (Open Knowledge Format)** bundle from the wiki.
-Read-only against `Intelligence/` — the only writes are inside the
-output directory the user names (or `Intelligence/_export/out/` by
-default). Runs on user request; **not** part of the consolidate
-auto-chain.
-
-When the user says "export" (optionally naming a bucket):
-
-1. Run
-   `python3 Intelligence/_export/export_okf.py [<bucket>] --out <dir>`
-   (omit `<bucket>` to export the whole wiki). The script:
-   - copies article files (already OKF-conformant after `consolidate`
-     writes frontmatter);
-   - renames `_master-index.md`/`_index.md` to OKF `index.md` in the
-     bundle so a non-Obsidian consumer (and GitHub's folder view) reads
-     the routers natively;
-   - **derives a per-bucket `log.md`** changelog from that bucket's
-     `Intelligence/log.tsv` rows (the live `log.tsv` is never split —
-     it stays the single operational DB; `log.md` exists only in the
-     bundle);
-   - rewrites `[[wiki links]]` to relative markdown links in the bundle
-     copy (the working vault keeps its `[[ ]]`), and keeps the
-     `related:`/relative-path graph so links traverse without Obsidian;
-   - **strips private zones** — `_episodes/`, `_eval/`, `_search/`,
-     `_export/`, `log.tsv`, `_unsorted/` — governance, not shareable
-     knowledge.
-2. Report the bundle path, article count, and any conformance warnings
-   (same check as `refine`'s `okf=` line).
-
-`export_okf.py --check` is the no-write conformance pass `refine` calls;
-`export_okf.py … --tar` additionally emits a tarball.
-
----
 
 ## Episodic memory
 

@@ -6,9 +6,9 @@ new buckets are a human decision.
 
 ## Buckets
 
-- [[domain-a/_master-index|Domain A]] — placeholder bucket demonstrating multi-topic linking and image co-location.
-- [[domain-b/_master-index|Domain B]] — placeholder bucket demonstrating a single-topic case.
+- [[domain-a/index|Domain A]] — placeholder bucket demonstrating multi-topic linking and image co-location.
+- [[domain-b/index|Domain B]] — placeholder bucket demonstrating a single-topic case.
 
 ## Quarantine
 
-- [[_unsorted/_index|_unsorted]] — articles that matched no bucket. Human review required.
+- [[_unsorted/index|_unsorted]] — articles that matched no bucket. Human review required.

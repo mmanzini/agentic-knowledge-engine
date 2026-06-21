@@ -42,16 +42,13 @@ vault/
     │   ├── _index.md       # zone description
     │   ├── build_index.py  # indexer (incremental; consolidate auto-chain runs it)
     │   ├── search.py       # query CLI — returns article pointers, never answers
-    │   └── index.db        # gitignored build artifact
-    ├── _export/            # OKF bundle emission (the `export` verb)
-    │   ├── _index.md       # zone description
-    │   ├── export_okf.py   # emit a portable OKF bundle (or `--check` conformance)
-    │   ├── migrate_frontmatter.py  # one-time frontmatter backfill
-    │   └── okf_common.py   # shared helpers + the bucket→type map
-    └── <bucket>/
-        ├── _master-index.md   # bucket scope + topic list
+    │   ├── index.db        # gitignored build artifact
+    │   └── okf_tools.py    # conformance check + per-bucket log.md generator
+    └── <bucket>/           # each bucket IS its own in-place OKF bundle
+        ├── index.md           # bucket router (OKF) — scope + topic list
+        ├── log.md             # derived OKF changelog (from log.tsv)
         └── <topic>/
-            ├── _index.md      # topic description + article list + related topics
+            ├── index.md       # topic router (OKF) — description + article list
             ├── article-slug.md
             └── image.png      # images live beside their article
 ```
@@ -127,7 +124,7 @@ The fallback chain, end to end:
 flowchart TD
     Q["question"] --> T0{"tier 0 — snapshot<br/>already in context:<br/>does it answer?"}
     T0 -- "yes — zero file reads" --> A["answer directly,<br/>cite the articles it names"]
-    T0 -- no --> T1["tier 1 — index walk<br/>index.md → _master-index.md →<br/>topic _index.md → ≤5 article bodies"]
+    T0 -- no --> T1["tier 1 — index walk<br/>index.md → bucket index.md →<br/>topic index.md → ≤5 article bodies"]
     T1 -- hit --> C["cited answer:<br/>(source: path) per claim"]
     T1 -- "miss / fuzzy phrasing" --> T2["tier 2 — hybrid search<br/>FTS5 keyword + local embeddings,<br/>RRF-merged"]
     T2 -- "pointers — never citable text" --> R["open and read<br/>the pointed articles"]
@@ -151,8 +148,10 @@ flowchart TD
 ## The verbs
 
 Four core verbs — `query`, `consolidate`, `refine`, `evaluate` — plus
-`reflect`, which maintains episodic memory, and `export`, which emits a
-portable OKF bundle on demand. **Every run is recall → act → capture:**
+`reflect`, which maintains episodic memory. Each bucket is its own
+in-place OKF bundle (`index.md` routers + `type` frontmatter + a
+`related:` graph + a derived `log.md`), so a bucket's GitHub mirror is a
+conformant bundle with no export step. **Every run is recall → act → capture:**
 the agent recalls relevant past episodes before acting and writes a new
 episode after, so experience accumulates across runs.
 
@@ -162,7 +161,8 @@ distilled, and re-indexed before it is committed:
 ```mermaid
 flowchart LR
     REC["recall<br/>≤3 episodes +<br/>reflections.md"] --> CON["consolidate<br/>route + write<br/>+ log"]
-    CON --> REF["refine<br/>read-only audit<br/>drift=N"]
+    CON --> LOG["refresh bucket<br/>log.md (from log.tsv)"]
+    LOG --> REF["refine<br/>read-only audit<br/>drift=N"]
     REF --> RFL["reflect<br/>distil episodes,<br/>regenerate snapshot.md"]
     RFL --> IDX["rebuild _search/<br/>index (incremental)"]
     IDX --> GIT["git commit"]
@@ -176,12 +176,12 @@ Pull only the relevant context, top-down:
 
 1. Read `Intelligence/index.md` — learn which buckets exist.
 2. Pick the best-fit bucket(s) from one-line descriptions.
-3. Read the bucket's `_master-index.md` — pick topic(s).
-4. Read topic `_index.md` files — pick which article bodies to load.
+3. Read the bucket's `index.md` — pick topic(s).
+4. Read topic `index.md` files — pick which article bodies to load.
 5. Read only those articles. Follow `[[wiki links]]` within the same bucket only.
 6. Return answer with inline citations: `(source: path/to/article.md)`.
 
-**Budget rule:** at most 1 `index.md` + 1–2 `_master-index.md` + a handful of `_index.md` + ≤5 article bodies. Surface to the user if more is needed.
+**Budget rule:** at most 1 top `index.md` + 1–2 bucket `index.md` + a handful of topic `index.md` + ≤5 article bodies. Surface to the user if more is needed.
 
 **Tier-2 fallback:** if the walk misses (or the phrasing is too fuzzy to match index one-liners), run `python3 Intelligence/_search/search.py "<query>" --json` and treat the hits as routing candidates — open, read, and cite the pointed articles normally. A search call costs 0 toward the budget; the articles it routes to count as usual.
 
@@ -190,12 +190,12 @@ Pull only the relevant context, top-down:
 Ingest sources from `Resources/` into `Intelligence/`:
 
 1. Walk `Resources/` — skip folders with `include_in_consolidation: false`.
-2. Route each source to the best-fit bucket(s) using `_master-index.md` Scope paragraphs.
+2. Route each source to the best-fit bucket(s) using bucket `index.md` Scope paragraphs.
    - No bucket fits → write to `_unsorted/`, flag in report.
    - Multiple buckets fit → write into each (images copied into each).
 3. Within the bucket, pick or create a topic.
 4. Write the article (schema below). Copy images into the topic folder.
-5. Update `_index.md`, `_master-index.md` (if new topic), `log.tsv`.
+5. Update `index.md` (bucket + topic routers), `log.tsv`, and the bucket's `log.md`.
 6. Delete source if `delete_after_consolidation: true` (default).
 
 **Per-bucket workers:** one worker per bucket — run in parallel if the runtime supports it, otherwise sequentially. Only the orchestrator writes `_unsorted/`, `index.md`, `log.tsv`, and `_eval/results.tsv`.
@@ -237,18 +237,6 @@ Maintains episodic memory — reads only `_episodes/`, writes only inside it:
 
 **Why recall stays cheap as episodes pile up:** a recall walk reads the `_episodes/` router, one kind-index of one-liners, then at most **3 episode bodies** plus the small merged `reflections.md`. `distilled` episodes are skipped. So recall cost is bounded — it does not grow with the store.
 
-### `export`
-
-Emits the wiki as a portable **OKF (Open Knowledge Format)** bundle — runs on demand, **not** part of the auto-chain. `python3 Intelligence/_export/export_okf.py [<bucket>] --out <dir>`:
-
-- copies the (already frontmatter-bearing) articles;
-- renames `_master-index.md` / `_index.md` to OKF `index.md` so GitHub and any non-Obsidian consumer read the routers natively;
-- derives a per-bucket `log.md` changelog from `log.tsv` (the live `log.tsv` is never split — `log.md` exists only in the bundle);
-- rewrites `[[wiki links]]` to relative markdown links **in the bundle copy** (your working vault keeps its `[[ ]]`);
-- strips private zones — `_episodes/`, `_eval/`, `_search/`, `_export/`, `log.tsv`, `_unsorted/`.
-
-`export_okf.py --check` is the no-write conformance pass `refine` reports as `okf=…`; `--tar` also emits a tarball. The result is just markdown + YAML — readable on GitHub, indexable by any tool, consumable by any agent.
-
 ---
 
 ## Schemas
@@ -273,7 +261,7 @@ One paragraph describing what lives here and any handling notes.
 | `delete_after_consolidation: true` | Sources deleted after successful consolidation (ephemeral material) |
 | Missing | Defaults to `true` / `true` |
 
-### `Intelligence/<bucket>/_master-index.md`
+### `Intelligence/<bucket>/index.md` (bucket router)
 
 ```markdown
 # Bucket name
@@ -287,7 +275,7 @@ This is the routing signal the agent uses when allocating sources.
 - [[topic-b/_index|Topic B]] — one-line description
 ```
 
-### `Intelligence/<bucket>/<topic>/_index.md`
+### `Intelligence/<bucket>/<topic>/index.md` (topic router)
 
 ```markdown
 # Topic name
@@ -351,7 +339,7 @@ Embed images with `![[image.png]]` — the file must live in the same topic fold
 - [[other-article-in-this-bucket]] · [other-article](../topic/other-article.md) — one-line note
 ```
 
-`type` is the only required field (OKF prescribes no taxonomy — define your own; map buckets to defaults in `Intelligence/_export/okf_common.py`). The `**Source:**` line and inline `(source: …)` citations stay. **Dual links:** `## Related` keeps the Obsidian `[[wiki link]]` *and* a relative-path link beside it, and mirrors every edge into the `related:` array — so Obsidian and a non-Obsidian OKF consumer both traverse. See *Open Knowledge Format* below.
+`type` is the only required field (OKF prescribes no taxonomy — define your own type vocabulary). The `**Source:**` line and inline `(source: …)` citations stay. **Dual links:** `## Related` keeps the Obsidian `[[wiki link]]` *and* a relative-path link beside it, and mirrors every edge into the `related:` array — so Obsidian and a non-Obsidian OKF consumer both traverse. See *Open Knowledge Format* below.
 
 ### Citation rules
 
@@ -409,24 +397,26 @@ The orchestrator compares the current drift count to the previous `refine_summar
 
 The wiki is [OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)-native: a directory of markdown files, one concept per file, each carrying YAML frontmatter (`type` required, the rest optional) and cross-linked into a graph. That is exactly the shape this engine already had — so OKF here is a thin conformance + portability layer, not a different model.
 
-**Dual-link model.** The working vault keeps Obsidian `[[wiki links]]` (same-bucket only — the curated routing graph the `query` walk follows). In parallel, every article carries a `related:` frontmatter array of repo-relative paths that **may cross buckets** — the portable, machine-readable OKF graph. The `export` verb emits a bundle in which the body `[[ ]]` are rewritten to relative links too, so a consumer with no Obsidian can traverse the whole thing. The vault is never mutated by export.
+**The bucket is the bundle — no export step.** Each `Intelligence/<bucket>/` directory is *itself* a conformant OKF bundle: `index.md` routers, articles with `type` frontmatter, a `related:` cross-bucket graph, and a derived `log.md`. Point a bucket at a git mirror (this engine syncs buckets out via Unison) and the mirror *is* a clean OKF bundle, refreshed by the normal sync with nothing to export.
+
+**Dual-link model.** The vault keeps Obsidian `[[wiki links]]` (same-bucket only — the routing graph the `query` walk follows). In parallel every article carries a `related:` frontmatter array of repo-relative paths that **may cross buckets** — the portable, machine-readable OKF graph a non-Obsidian consumer traverses. The `[[ ]]` stay for Obsidian; nothing rewrites the live files.
 
 ```mermaid
 flowchart LR
-    subgraph vault ["working vault (Obsidian)"]
+    subgraph bucket ["Intelligence/&lt;bucket&gt;/ — the live bucket = the bundle"]
         direction TB
-        A["articles<br/>OKF frontmatter"]
-        A --- W["[[ wikilinks ]]<br/>same-bucket routing graph"]
+        A["articles<br/>OKF type frontmatter"]
+        A --- I["index.md routers<br/>+ derived log.md"]
+        A --- W["[[ wikilinks ]]<br/>Obsidian routing graph"]
         A --- RL["related: array<br/>portable graph, may cross buckets"]
     end
-    vault --> X["export_okf.py"]
-    X --> B["OKF bundle<br/>index.md routers · per-bucket log.md<br/>[[ ]] rewritten to relative links<br/>private zones stripped"]
-    B --> G["GitHub folder view"]
-    B --> C["other agents / search indexers"]
-    B --> H["static HTML visualiser"]
+    bucket -->|"Unison sync (auto)"| M["GitHub mirror repo<br/>= conformant OKF bundle"]
+    M --> G["GitHub folder view"]
+    M --> C["other agents / search indexers"]
+    M --> H["static HTML visualiser"]
 ```
 
-Why a format and not a service: a bundle is **just files** — readable in any editor, renderable on GitHub, indexable by any search tool, shippable as a tarball or git repo, parseable by any agent with no SDK. `type` is the only required field; you define your own type taxonomy.
+Why a format and not a service: a bundle is **just files** — readable in any editor, renderable on GitHub, indexable by any search tool, shippable as a git repo, parseable by any agent with no SDK. `type` is the only required field; you define your own type taxonomy.
 
 ---
 
@@ -447,7 +437,7 @@ Why a format and not a service: a bundle is **just files** — readable in any e
 ## Getting started
 
 1. Clone this repo as your vault root.
-2. Replace the placeholder `domain-a` / `domain-b` buckets with your own macro taxonomy. Each bucket needs a `_master-index.md` with a Scope paragraph.
+2. Replace the placeholder `domain-a` / `domain-b` buckets with your own macro taxonomy. Each bucket needs an `index.md` router with a Scope paragraph.
 3. Replace or extend `_eval/questions.md` with questions your vault should be able to answer. These are your benchmark — be specific.
 4. Fill in `Resources/personal/about-me.md` and `Resources/personal/writing-rules.md` with your own identity and style notes. These are prescriptive — the agent preserves your wording rather than paraphrasing.
 5. Drop source material into `Resources/<folder>/` with a `README.md` declaring the consolidation flags.

@@ -29,7 +29,7 @@ DB_PATH = SEARCH_DIR / "index.db"
 
 # Governance zones and index files are routing overhead, not articles.
 SKIP_DIRS = {"_episodes", "_eval", "_unsorted", "_search", "_export"}
-SKIP_FILES = {"_index.md", "_master-index.md", "index.md"}
+SKIP_FILES = {"_index.md", "_master-index.md", "index.md", "log.md"}
 
 EMBED_MODEL = "all-MiniLM-L6-v2"
 
