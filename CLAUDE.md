@@ -59,12 +59,13 @@ pipeline.
 
 ## Verbs
 
-The vault has five verbs: **`query`** (read), **`consolidate`**
+The vault has six verbs: **`query`** (read), **`consolidate`**
 (write from `Resources/`), **`refine`** (audit, read-only),
-**`evaluate`** (measure), and **`reflect`** (maintain episodic
-memory). Schemas, hard rules, log/eval formats, and the drift-count
-definition all live in `schema.md`. The recall/capture mechanics that
-wrap every verb live in the **Episodic memory** section below.
+**`evaluate`** (measure), **`reflect`** (maintain episodic
+memory), and **`export`** (emit an OKF bundle). Schemas, hard rules,
+log/eval formats, and the drift-count definition all live in
+`schema.md`. The recall/capture mechanics that wrap every verb live in
+the **Episodic memory** section below.
 
 ---
 
@@ -187,6 +188,20 @@ Then proceed.
    `_index.md` and add it to the bucket's `_master-index.md`.
 4. Write or update the article using the *Article schema* from
    `schema.md`. Copy any referenced images into the topic folder.
+   **Frontmatter (OKF):** open every written/updated article with the
+   YAML frontmatter block — `type` (default from the bucket per the
+   *Article type vocabulary*, override when a more specific type fits),
+   `title`, `description`, `bucket`, `topic`, `tags`, `source`,
+   `resource` (live URL when the origin has one), `timestamp` (this
+   run, ISO 8601 UTC), `status`, and the `related:` array. Body shape
+   and inline `(source: …)` citations are unchanged.
+   **Dual links:** in `## Related`, write each link as
+   `[[slug]] · [title](../<topic>/<article>.md)` (Obsidian wikilink +
+   portable relative path), and mirror every relation into the
+   frontmatter `related:` array as a repo-relative path. `[[ ]]` stays
+   same-bucket (hard rule 2); `related:`/relative paths **may** cross
+   buckets (the portable OKF graph). When updating an existing article,
+   add the new inbound `related:`/Related entry on the other side too.
 5. Update the topic's `_index.md` (add the article, refresh
    `Related Topics` if needed).
 6. Update the bucket's `_master-index.md` if a new topic was
@@ -254,6 +269,12 @@ Also report (do not count toward drift; track separately in `notes`):
   in `notes`. The topic's `_index.md` becomes too long to serve its
   routing purpose at that size; flag for human decision (split into
   sibling topics or accept the cost).
+- **OKF conformance** — run
+  `python3 Intelligence/_export/export_okf.py --check` (whole-wiki, no
+  write) and note `okf=conformant` or `okf=<N>-violations` with a short
+  breakdown (articles missing `type`, unresolved `related:`/relative
+  links). Report only — the missing-`type` case already counts once
+  under schema-violations drift; this line is the OKF-specific rollup.
 - **Search-index staleness** — if `Intelligence/_search/index.db` is
   missing or older than the newest article file, note
   `search_index=stale` (report only — not part of the frozen drift
@@ -325,6 +346,42 @@ recall/capture mechanics are described in *Episodic memory* below.
 Runs last in the `consolidate → refine → reflect` auto-chain
 (*Orchestration rules*), so each consolidation's experience is distilled
 while fresh. Never edits `CLAUDE.md` or `schema.md`.
+
+---
+
+### `export`
+
+Emit a portable **OKF (Open Knowledge Format)** bundle from the wiki.
+Read-only against `Intelligence/` — the only writes are inside the
+output directory the user names (or `Intelligence/_export/out/` by
+default). Runs on user request; **not** part of the consolidate
+auto-chain.
+
+When the user says "export" (optionally naming a bucket):
+
+1. Run
+   `python3 Intelligence/_export/export_okf.py [<bucket>] --out <dir>`
+   (omit `<bucket>` to export the whole wiki). The script:
+   - copies article files (already OKF-conformant after `consolidate`
+     writes frontmatter);
+   - renames `_master-index.md`/`_index.md` to OKF `index.md` in the
+     bundle so a non-Obsidian consumer (and GitHub's folder view) reads
+     the routers natively;
+   - **derives a per-bucket `log.md`** changelog from that bucket's
+     `Intelligence/log.tsv` rows (the live `log.tsv` is never split —
+     it stays the single operational DB; `log.md` exists only in the
+     bundle);
+   - rewrites `[[wiki links]]` to relative markdown links in the bundle
+     copy (the working vault keeps its `[[ ]]`), and keeps the
+     `related:`/relative-path graph so links traverse without Obsidian;
+   - **strips private zones** — `_episodes/`, `_eval/`, `_search/`,
+     `_export/`, `log.tsv`, `_unsorted/` — governance, not shareable
+     knowledge.
+2. Report the bundle path, article count, and any conformance warnings
+   (same check as `refine`'s `okf=` line).
+
+`export_okf.py --check` is the no-write conformance pass `refine` calls;
+`export_okf.py … --tar` additionally emits a tarball.
 
 ---
 

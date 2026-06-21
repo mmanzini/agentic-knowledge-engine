@@ -28,7 +28,7 @@ INTEL_DIR = SEARCH_DIR.parent
 DB_PATH = SEARCH_DIR / "index.db"
 
 # Governance zones and index files are routing overhead, not articles.
-SKIP_DIRS = {"_episodes", "_eval", "_unsorted", "_search"}
+SKIP_DIRS = {"_episodes", "_eval", "_unsorted", "_search", "_export"}
 SKIP_FILES = {"_index.md", "_master-index.md", "index.md"}
 
 EMBED_MODEL = "all-MiniLM-L6-v2"
@@ -45,6 +45,49 @@ def iter_articles():
             rel = path.relative_to(INTEL_DIR)
             topic = rel.parts[1] if len(rel.parts) > 2 else ""
             yield bucket_dir.name, topic, path
+
+
+def parse_frontmatter(text):
+    """Return (facets:dict, body) — minimal reader for OKF frontmatter.
+
+    Pulls type/title/description (scalars) and tags (inline list). Not a
+    general YAML parser; matches what consolidate/migration emit.
+    """
+    if not text.startswith("---\n"):
+        return {}, text
+    end = text.find("\n---", 4)
+    if end == -1:
+        return {}, text
+    block, body = text[4:end], text[end + 4:].lstrip("\n")
+    fm = {}
+    for line in block.splitlines():
+        m = re.match(r"^(type|title|description|tags):\s*(.*)$", line)
+        if not m:
+            continue
+        key, val = m.group(1), m.group(2).strip()
+        if key == "tags":
+            inner = val.strip("[]").strip()
+            fm["tags"] = " ".join(x.strip() for x in inner.split(",") if x.strip())
+        else:
+            fm[key] = val
+    return fm, body
+
+
+def facet_chunk(facets):
+    """A leading synthetic chunk so FTS/embeddings match frontmatter facets."""
+    parts = []
+    if facets.get("title"):
+        parts.append(facets["title"])
+    if facets.get("description"):
+        parts.append(facets["description"])
+    tail = []
+    if facets.get("type"):
+        tail.append(f"type:{facets['type']}")
+    if facets.get("tags"):
+        tail.append(f"tags: {facets['tags']}")
+    if tail:
+        parts.append(" ".join(tail))
+    return "\n".join(parts).strip()
 
 
 def chunk_article(text):
@@ -93,7 +136,11 @@ def ensure_schema(db):
             bucket TEXT NOT NULL,
             topic TEXT NOT NULL,
             content_hash TEXT NOT NULL,
-            embedded INTEGER NOT NULL DEFAULT 0
+            embedded INTEGER NOT NULL DEFAULT 0,
+            type TEXT DEFAULT '',         -- OKF frontmatter facets
+            tags TEXT DEFAULT '',
+            title TEXT DEFAULT '',
+            description TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS chunks (
             id INTEGER PRIMARY KEY,
@@ -126,7 +173,7 @@ def main():
 
     known = {row[0]: (row[1], row[2]) for row in db.execute("SELECT path, content_hash, embedded FROM files")}
     seen, added, skipped = set(), 0, 0
-    pending = []  # (rel_path, bucket, topic, content_hash, chunks)
+    pending = []  # (rel_path, bucket, topic, content_hash, facets, chunks)
 
     for bucket, topic, path in iter_articles():
         rel = str(path.relative_to(INTEL_DIR))
@@ -138,7 +185,12 @@ def main():
         if prev and prev[0] == content_hash and (prev[1] == 1 or embedder is None):
             skipped += 1
             continue
-        pending.append((rel, bucket, topic, content_hash, chunk_article(text)))
+        facets, body = parse_frontmatter(text)
+        chunks = chunk_article(body)
+        fc = facet_chunk(facets)
+        if fc:
+            chunks = [fc] + chunks
+        pending.append((rel, bucket, topic, content_hash, facets, chunks))
 
     # Remove rows for deleted files so search never routes to a gone article.
     removed = set(known) - seen
@@ -148,7 +200,7 @@ def main():
             "SELECT 'delete', id, text FROM chunks WHERE path = ?", (rel,))
         db.execute("DELETE FROM files WHERE path = ?", (rel,))
 
-    for rel, bucket, topic, content_hash, chunks in pending:
+    for rel, bucket, topic, content_hash, facets, chunks in pending:
         db.execute(
             "INSERT INTO chunks_fts(chunks_fts, rowid, text) "
             "SELECT 'delete', id, text FROM chunks WHERE path = ?", (rel,))
@@ -159,8 +211,11 @@ def main():
             embs = embedder.encode(chunks, normalize_embeddings=True)
             vectors = [np.asarray(v, dtype="float32").tobytes() for v in embs]
         db.execute(
-            "INSERT INTO files (path, bucket, topic, content_hash, embedded) VALUES (?, ?, ?, ?, ?)",
-            (rel, bucket, topic, content_hash, 1 if embedder is not None else 0))
+            "INSERT INTO files (path, bucket, topic, content_hash, embedded, type, tags, title, description) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (rel, bucket, topic, content_hash, 1 if embedder is not None else 0,
+             facets.get("type", ""), facets.get("tags", ""),
+             facets.get("title", ""), facets.get("description", "")))
         for seq, (chunk, vec) in enumerate(zip(chunks, vectors)):
             cur = db.execute(
                 "INSERT INTO chunks (path, seq, text, embedding) VALUES (?, ?, ?, ?)",

@@ -25,7 +25,11 @@ These are non-negotiable. A run that violates any of them is a bug.
    `delete_after_consolidation: true` (or unset).
 2. **`[[wiki links]]` are same-bucket only.** Free across topics
    inside a bucket; **never** across buckets. An article that needs
-   to exist in two buckets is duplicated, not linked.
+   to exist in two buckets is duplicated, not linked. This wall applies
+   to `[[ ]]` edges *only* — the parallel relative-path / frontmatter
+   `related:` channel (see *Article schema*) is the portable OKF graph
+   and **may** cross buckets. The `query` walk follows `[[ ]]` only, so
+   its same-bucket guarantee is intact.
 3. **No silent bucket creation.** Sources matching no existing bucket
    go to `Intelligence/_unsorted/` and surface in the run report.
 4. **Topic creation is allowed and expected.** When no existing topic
@@ -129,7 +133,29 @@ One paragraph describing what this topic clusters.
 
 ### Article schema
 
+Every article opens with a YAML frontmatter block, then the human body.
+The frontmatter is the **OKF (Open Knowledge Format) interoperability
+surface** — structured, queryable fields that make the article
+machine-parseable by agents, the search indexer, Dataview, and any
+external OKF consumer. The body is unchanged; frontmatter is additive.
+
 ```markdown
+---
+type: <one of the type vocabulary — see *Article type vocabulary* below>   # REQUIRED
+title: <Article title — matches the H1>
+description: <one sentence — what this article is and its core thesis>
+bucket: <bucket-slug>
+topic: <topic-slug>
+tags: [tag, tag, …]
+source: <primary source path under Resources/, or self-authored>
+resource: <live URL of the origin when one exists, else omit/blank>
+timestamp: <ISO 8601 UTC of the last consolidate touch>
+status: active | needs-verification | deprecated
+related:
+  - <bucket>/<topic>/<article>.md      # repo-relative; MAY cross buckets (OKF graph)
+  - …
+---
+
 # <Article title>
 
 **Source:** [<source name>](<url-or-path>)
@@ -155,8 +181,43 @@ same topic folder as the article — see *Image handling* below.
 
 ## Related
 
-- [[<other-article-in-this-bucket>]] — one-line note
+- [[<other-article-in-this-bucket>]] · [<title>](../<topic>/<article>.md) — one-line note
 ```
+
+**Required frontmatter key:** `type` (the only mandatory field, mirroring
+OKF). All other keys are recommended but optional; a missing `type`
+counts toward **schema-violations** drift. The body's `**Source:**` line
+and inline `(source: …)` citations are **retained** — the *Citation
+rules* are unchanged. `source`/`resource` duplicate provenance in a
+queryable field; the inline citations remain the per-claim record.
+
+**Dual-link channel.** The `## Related` block keeps the Obsidian
+`[[wiki link]]` (same-bucket only, hard rule 2) **and** adds a
+relative-path markdown link beside it, so both a) Obsidian's graph and
+the `query` walk and b) an external OKF consumer outside Obsidian can
+traverse. The frontmatter `related:` array is the canonical
+machine-readable edge list and **may cross buckets** (the portable OKF
+graph). See *Cross-bucket links* under *Drift count*.
+
+### Article type vocabulary
+
+`type` is the only OKF-required field and takes any string — OKF
+prescribes **no** taxonomy (its `Table`/`Metric`/`Runbook` examples are
+illustrative of one producer's data catalogue, not a fixed enum). Define
+your own vocabulary that fits your buckets. A reasonable starter set:
+
+| `type` | Use for |
+|---|---|
+| `reference` | evergreen, factual reference articles (a sensible default) |
+| `synthesis` | distilled multi-source write-ups |
+| `note` | short atomic notes |
+| `digest` | date-keyed daily/periodic summaries |
+| `profile` | identity / personal-context articles |
+
+`consolidate` defaults `type` from the bucket (map your buckets to types
+in `Intelligence/_export/okf_common.py`), and may override per-article
+when a more specific type fits. An unrecognised `type` value is not a
+drift violation (OKF treats it as an opaque facet).
 
 ---
 
@@ -290,12 +351,18 @@ A single integer. Sum of:
   file, or files on disk not listed in the relevant index.
 - **Broken embeds** — `![[image.ext]]` references that don't resolve
   in the same topic folder.
-- **Cross-bucket links** — any `[[link]]` that crosses bucket
-  boundaries (hard-rule violation; counts as a single drift unit per
-  occurrence).
+- **Cross-bucket links** — any `[[wiki link]]` that crosses bucket
+  boundaries (hard-rule-2 violation; counts as a single drift unit per
+  occurrence). **Relative-path markdown links and the frontmatter
+  `related:` array are exempt** — they are the intended portable OKF
+  graph channel and may cross buckets freely. Only `[[ ]]` edges are
+  walled; the query walk follows only `[[ ]]`, so its same-bucket
+  safety is preserved.
 - **Schema violations** — articles missing required sections
-  (`Source:`, `Summary`, etc.), or factual claims without
-  `(source: ...)` citations.
+  (`Source:`, `Summary`, etc.), factual claims without
+  `(source: ...)` citations, or **a missing required `type` frontmatter
+  key**. (Other frontmatter keys are optional; an unrecognised `type`
+  value is not a violation.)
 - **Episode integrity** — episodes in `Intelligence/_episodes/`
   missing required frontmatter or sections (see *Episodic memory
   contracts*), or any `[[wiki link]]` inside an episode that points

@@ -43,6 +43,11 @@ vault/
     │   ├── build_index.py  # indexer (incremental; consolidate auto-chain runs it)
     │   ├── search.py       # query CLI — returns article pointers, never answers
     │   └── index.db        # gitignored build artifact
+    ├── _export/            # OKF bundle emission (the `export` verb)
+    │   ├── _index.md       # zone description
+    │   ├── export_okf.py   # emit a portable OKF bundle (or `--check` conformance)
+    │   ├── migrate_frontmatter.py  # one-time frontmatter backfill
+    │   └── okf_common.py   # shared helpers + the bucket→type map
     └── <bucket>/
         ├── _master-index.md   # bucket scope + topic list
         └── <topic>/
@@ -61,7 +66,7 @@ flowchart TB
         direction LR
         A["signals & sessions<br/>auto-capture skill + SessionEnd hook"] --> B["Resources/<br/>raw, immutable"]
         B --> C["consolidate<br/>route by content, write, cite, log"]
-        C --> D["Intelligence/ articles<br/>+ indexes + log.tsv"]
+        C --> D["Intelligence/ articles<br/>OKF frontmatter + dual links<br/>+ indexes + log.tsv"]
         C --> E["_episodes/<br/>operational, life, signals"]
         E --> F["reflect: reflections.md<br/>+ snapshot.md + search index"]
     end
@@ -146,9 +151,10 @@ flowchart TD
 ## The verbs
 
 Four core verbs — `query`, `consolidate`, `refine`, `evaluate` — plus
-`reflect`, which maintains episodic memory. **Every run is recall → act
-→ capture:** the agent recalls relevant past episodes before acting and
-writes a new episode after, so experience accumulates across runs.
+`reflect`, which maintains episodic memory, and `export`, which emits a
+portable OKF bundle on demand. **Every run is recall → act → capture:**
+the agent recalls relevant past episodes before acting and writes a new
+episode after, so experience accumulates across runs.
 
 The write side runs as one auto-chain — every consolidate is audited,
 distilled, and re-indexed before it is committed:
@@ -231,6 +237,18 @@ Maintains episodic memory — reads only `_episodes/`, writes only inside it:
 
 **Why recall stays cheap as episodes pile up:** a recall walk reads the `_episodes/` router, one kind-index of one-liners, then at most **3 episode bodies** plus the small merged `reflections.md`. `distilled` episodes are skipped. So recall cost is bounded — it does not grow with the store.
 
+### `export`
+
+Emits the wiki as a portable **OKF (Open Knowledge Format)** bundle — runs on demand, **not** part of the auto-chain. `python3 Intelligence/_export/export_okf.py [<bucket>] --out <dir>`:
+
+- copies the (already frontmatter-bearing) articles;
+- renames `_master-index.md` / `_index.md` to OKF `index.md` so GitHub and any non-Obsidian consumer read the routers natively;
+- derives a per-bucket `log.md` changelog from `log.tsv` (the live `log.tsv` is never split — `log.md` exists only in the bundle);
+- rewrites `[[wiki links]]` to relative markdown links **in the bundle copy** (your working vault keeps its `[[ ]]`);
+- strips private zones — `_episodes/`, `_eval/`, `_search/`, `_export/`, `log.tsv`, `_unsorted/`.
+
+`export_okf.py --check` is the no-write conformance pass `refine` reports as `okf=…`; `--tar` also emits a tarball. The result is just markdown + YAML — readable on GitHub, indexable by any tool, consumable by any agent.
+
 ---
 
 ## Schemas
@@ -289,7 +307,24 @@ One paragraph describing what this topic clusters.
 
 ### Article
 
+Each article opens with **OKF (Open Knowledge Format) YAML frontmatter** — the queryable interoperability surface — then the human body:
+
 ```markdown
+---
+type: reference              # REQUIRED — the only mandatory field (your taxonomy)
+title: Article title         # matches the H1
+description: one sentence — what this is and its core thesis
+bucket: bucket-slug
+topic: topic-slug
+tags: [tag, tag]
+source: Resources/path/to/source.md   # or self-authored
+resource:                    # live URL of the origin, when one exists
+timestamp: 2026-01-01T00:00:00Z
+status: active               # active | needs-verification | deprecated
+related:
+  - bucket/topic/other-article.md     # repo-relative; MAY cross buckets (OKF graph)
+---
+
 # Article title
 
 **Source:** [Source name](url-or-path)
@@ -313,8 +348,10 @@ Embed images with `![[image.png]]` — the file must live in the same topic fold
 
 ## Related
 
-- [[other-article-in-this-bucket]] — one-line note
+- [[other-article-in-this-bucket]] · [other-article](../topic/other-article.md) — one-line note
 ```
+
+`type` is the only required field (OKF prescribes no taxonomy — define your own; map buckets to defaults in `Intelligence/_export/okf_common.py`). The `**Source:**` line and inline `(source: …)` citations stay. **Dual links:** `## Related` keeps the Obsidian `[[wiki link]]` *and* a relative-path link beside it, and mirrors every edge into the `related:` array — so Obsidian and a non-Obsidian OKF consumer both traverse. See *Open Knowledge Format* below.
 
 ### Citation rules
 
@@ -360,18 +397,43 @@ timestamp  question_id  files_read  answer_quality  notes
 | Orphans | Articles with zero inbound `[[wiki links]]` from other articles in their bucket |
 | Index mismatches | Entries in any index that don't resolve to a real file, or files on disk not listed |
 | Broken embeds | `![[image.ext]]` references missing from the topic folder |
-| Cross-bucket links | Any `[[link]]` that crosses bucket boundaries |
-| Schema violations | Articles missing required sections or factual claims without citations |
+| Cross-bucket links | Any `[[wiki link]]` that crosses bucket boundaries. **Relative-path / `related:` links are exempt** — they are the portable OKF graph and may cross buckets; only `[[ ]]` is walled |
+| Schema violations | Articles missing required sections, factual claims without citations, or a missing required `type` frontmatter key |
 | Episode integrity | Episodes missing required frontmatter/sections, or any `[[ ]]` link inside an episode that points outside `_episodes/` (episodes reference articles by `(source: …)` citation only) |
 
 The orchestrator compares the current drift count to the previous `refine_summary` row and reports **advance** (drift down, or flat with `articles_changed > 0`), **hold** (flat, no changes), or **regress** (drift up). Regressions are surfaced — never silently undone.
 
 ---
 
+## Open Knowledge Format (OKF)
+
+The wiki is [OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)-native: a directory of markdown files, one concept per file, each carrying YAML frontmatter (`type` required, the rest optional) and cross-linked into a graph. That is exactly the shape this engine already had — so OKF here is a thin conformance + portability layer, not a different model.
+
+**Dual-link model.** The working vault keeps Obsidian `[[wiki links]]` (same-bucket only — the curated routing graph the `query` walk follows). In parallel, every article carries a `related:` frontmatter array of repo-relative paths that **may cross buckets** — the portable, machine-readable OKF graph. The `export` verb emits a bundle in which the body `[[ ]]` are rewritten to relative links too, so a consumer with no Obsidian can traverse the whole thing. The vault is never mutated by export.
+
+```mermaid
+flowchart LR
+    subgraph vault ["working vault (Obsidian)"]
+        direction TB
+        A["articles<br/>OKF frontmatter"]
+        A --- W["[[ wikilinks ]]<br/>same-bucket routing graph"]
+        A --- RL["related: array<br/>portable graph, may cross buckets"]
+    end
+    vault --> X["export_okf.py"]
+    X --> B["OKF bundle<br/>index.md routers · per-bucket log.md<br/>[[ ]] rewritten to relative links<br/>private zones stripped"]
+    B --> G["GitHub folder view"]
+    B --> C["other agents / search indexers"]
+    B --> H["static HTML visualiser"]
+```
+
+Why a format and not a service: a bundle is **just files** — readable in any editor, renderable on GitHub, indexable by any search tool, shippable as a tarball or git repo, parseable by any agent with no SDK. `type` is the only required field; you define your own type taxonomy.
+
+---
+
 ## Hard rules
 
 1. **`Resources/` is immutable** during a run. Only post-consolidate deletions are allowed.
-2. **Wiki links are same-bucket only.** An article duplicated into two buckets is copied, not linked.
+2. **Wiki links are same-bucket only.** An article duplicated into two buckets is copied, not linked. This walls `[[ ]]` edges only — the parallel relative-path / `related:` channel is the portable OKF graph and may cross buckets.
 3. **No silent bucket creation.** Unroutable sources go to `_unsorted/`.
 4. **Topic creation is allowed and expected.** No existing topic → agent creates one.
 5. **Images live beside their article.** No cross-folder image references.
