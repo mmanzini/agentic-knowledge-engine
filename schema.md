@@ -25,19 +25,23 @@ These are non-negotiable. A run that violates any of them is a bug.
    `delete_after_consolidation: true` (or unset).
 2. **`[[wiki links]]` are same-bucket only.** Free across topics
    inside a bucket; **never** across buckets. An article that needs
-   to exist in two buckets is duplicated, not linked.
+   to exist in two buckets is duplicated, not linked. This wall applies
+   to `[[ ]]` edges *only* — the parallel relative-path / frontmatter
+   `related:` channel (see *Article schema*) is the portable OKF graph
+   and **may** cross buckets. The `query` walk follows `[[ ]]` only, so
+   its same-bucket guarantee is intact.
 3. **No silent bucket creation.** Sources matching no existing bucket
    go to `Intelligence/_unsorted/` and surface in the run report.
 4. **Topic creation is allowed and expected.** When no existing topic
-   in the chosen bucket fits, create one with its `_index.md` and
-   register it in the bucket's `_master-index.md`.
+   in the chosen bucket fits, create one with its `index.md` and
+   register it in the bucket's `index.md`.
 5. **Images live with their articles.** Every `![[...]]` embed must
    resolve to a file in the same topic folder. No cross-folder image
    references. Duplicating an article into two buckets means copying
    the image into each.
 6. **Indexes and log stay in sync, every run.** A `consolidate` that
-   touches a bucket must update the topic's `_index.md` (always), the
-   bucket's `_master-index.md` (if a topic was created), and
+   touches a bucket must update the topic's `index.md` (always), the
+   bucket's `index.md` (if a topic was created), and
    `Intelligence/log.tsv` (always — one append per processed source).
    `Intelligence/index.md` only changes on first-touch of a bucket.
    The `query` verb relies on these indexes being truthful — stale
@@ -92,7 +96,7 @@ The two flags are independent:
 - Default if either field is missing: `include_in_consolidation: true`,
   `delete_after_consolidation: true`.
 
-### `Intelligence/<bucket>/_master-index.md`
+### `Intelligence/<bucket>/index.md` (bucket router)
 
 ```markdown
 # <Bucket name>
@@ -103,11 +107,11 @@ allocating new articles.
 
 ## Topics
 
-- [[<topic>/_index|Topic Title]] — one-line description of the topic cluster
+- [[<topic>/index|Topic Title]] — one-line description of the topic cluster
 - ...
 ```
 
-### `Intelligence/<bucket>/<topic>/_index.md`
+### `Intelligence/<bucket>/<topic>/index.md` (topic router)
 
 ```markdown
 # <Topic name>
@@ -121,7 +125,7 @@ One paragraph describing what this topic clusters.
 
 ## Related Topics
 
-- [[../<other-topic>/_index|Other Topic]] — one-line description
+- [[../<other-topic>/index|Other Topic]] — one-line description
 - ...
 ```
 
@@ -129,7 +133,29 @@ One paragraph describing what this topic clusters.
 
 ### Article schema
 
+Every article opens with a YAML frontmatter block, then the human body.
+The frontmatter is the **OKF (Open Knowledge Format) interoperability
+surface** — structured, queryable fields that make the article
+machine-parseable by agents, the search indexer, Dataview, and any
+external OKF consumer. The body is unchanged; frontmatter is additive.
+
 ```markdown
+---
+type: <one of the type vocabulary — see *Article type vocabulary* below>   # REQUIRED
+title: <Article title — matches the H1>
+description: <one sentence — what this article is and its core thesis>
+bucket: <bucket-slug>
+topic: <topic-slug>
+tags: [tag, tag, …]
+source: <primary source path under Resources/, or self-authored>
+resource: <live URL of the origin when one exists, else omit/blank>
+timestamp: <ISO 8601 UTC of the last consolidate touch>
+status: active | needs-verification | deprecated
+related:
+  - <bucket>/<topic>/<article>.md      # repo-relative; MAY cross buckets (OKF graph)
+  - …
+---
+
 # <Article title>
 
 **Source:** [<source name>](<url-or-path>)
@@ -155,8 +181,42 @@ same topic folder as the article — see *Image handling* below.
 
 ## Related
 
-- [[<other-article-in-this-bucket>]] — one-line note
+- [[<other-article-in-this-bucket>]] · [<title>](../<topic>/<article>.md) — one-line note
 ```
+
+**Required frontmatter key:** `type` (the only mandatory field, mirroring
+OKF). All other keys are recommended but optional; a missing `type`
+counts toward **schema-violations** drift. The body's `**Source:**` line
+and inline `(source: …)` citations are **retained** — the *Citation
+rules* are unchanged. `source`/`resource` duplicate provenance in a
+queryable field; the inline citations remain the per-claim record.
+
+**Dual-link channel.** The `## Related` block keeps the Obsidian
+`[[wiki link]]` (same-bucket only, hard rule 2) **and** adds a
+relative-path markdown link beside it, so both a) Obsidian's graph and
+the `query` walk and b) an external OKF consumer outside Obsidian can
+traverse. The frontmatter `related:` array is the canonical
+machine-readable edge list and **may cross buckets** (the portable OKF
+graph). See *Cross-bucket links* under *Drift count*.
+
+### Article type vocabulary
+
+`type` is the only OKF-required field and takes any string — OKF
+prescribes **no** taxonomy (its `Table`/`Metric`/`Runbook` examples are
+illustrative of one producer's data catalogue, not a fixed enum). Define
+your own vocabulary that fits your buckets. A reasonable starter set:
+
+| `type` | Use for |
+|---|---|
+| `reference` | evergreen, factual reference articles (a sensible default) |
+| `synthesis` | distilled multi-source write-ups |
+| `note` | short atomic notes |
+| `digest` | date-keyed daily/periodic summaries |
+| `profile` | identity / personal-context articles |
+
+`consolidate` defaults `type` from the bucket (default per the table above), and may override per-article
+when a more specific type fits. An unrecognised `type` value is not a
+drift violation (OKF treats it as an opaque facet).
 
 ---
 
@@ -261,7 +321,7 @@ timestamp	question_id	files_read	answer_quality	notes
 - `question_id` — `q1`, `q2`, …, matching IDs in
   `_eval/questions.md`.
 - `files_read` — integer count of files the agent had to `Read` to
-  answer (excludes `index.md`, `_master-index.md`, and `_index.md`
+  answer (excludes `index.md` router reads at any level
   reads — those are routing overhead, not retrieval cost). The
   primary metric — the closest analog to autoresearch's `val_bpb`.
   Lower is better.
@@ -284,18 +344,24 @@ A single integer. Sum of:
 
 - **Orphans** — articles with zero inbound `[[wiki links]]` from
   other articles in their bucket (excluding the topic's own
-  `_index.md` listing).
-- **Index mismatches** — entries in any `_index.md`,
-  `_master-index.md`, or `index.md` that don't resolve to a real
-  file, or files on disk not listed in the relevant index.
+  `index.md` listing).
+- **Index mismatches** — entries in any `index.md` router (bucket or
+  topic) that don't resolve to a real file, or files on disk not
+  listed in the relevant index.
 - **Broken embeds** — `![[image.ext]]` references that don't resolve
   in the same topic folder.
-- **Cross-bucket links** — any `[[link]]` that crosses bucket
-  boundaries (hard-rule violation; counts as a single drift unit per
-  occurrence).
+- **Cross-bucket links** — any `[[wiki link]]` that crosses bucket
+  boundaries (hard-rule-2 violation; counts as a single drift unit per
+  occurrence). **Relative-path markdown links and the frontmatter
+  `related:` array are exempt** — they are the intended portable OKF
+  graph channel and may cross buckets freely. Only `[[ ]]` edges are
+  walled; the query walk follows only `[[ ]]`, so its same-bucket
+  safety is preserved.
 - **Schema violations** — articles missing required sections
-  (`Source:`, `Summary`, etc.), or factual claims without
-  `(source: ...)` citations.
+  (`Source:`, `Summary`, etc.), factual claims without
+  `(source: ...)` citations, or **a missing required `type` frontmatter
+  key**. (Other frontmatter keys are optional; an unrecognised `type`
+  value is not a violation.)
 - **Episode integrity** — episodes in `Intelligence/_episodes/`
   missing required frontmatter or sections (see *Episodic memory
   contracts*), or any `[[wiki link]]` inside an episode that points

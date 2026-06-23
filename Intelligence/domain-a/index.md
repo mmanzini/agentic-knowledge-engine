@@ -9,5 +9,5 @@ it genuinely spans them, rather than linking across.
 
 ## Topics
 
-- [[topic-one/_index|Topic One]] — first example topic; demonstrates an article with an embedded image.
-- [[topic-two/_index|Topic Two]] — second example topic; demonstrates within-bucket cross-topic linking.
+- [[topic-one/index|Topic One]] — first example topic; demonstrates an article with an embedded image.
+- [[topic-two/index|Topic Two]] — second example topic; demonstrates within-bucket cross-topic linking.

@@ -9,4 +9,4 @@ fitting Domain A's scope (team-size or abstraction cost arguments)
 
 ## Topics
 
-- [[topic-three/_index|Topic Three]] — first (and currently only) example topic in this bucket; demonstrates a single-topic bucket with no `Related Topics`.
+- [[topic-three/index|Topic Three]] — first (and currently only) example topic in this bucket; demonstrates a single-topic bucket with no `Related Topics`.
