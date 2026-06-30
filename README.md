@@ -25,9 +25,9 @@ vault/
 │       └── SKILL.md        # auto-capture skill — writes signals to Resources/context/
 │
 └── Intelligence/           # agent-maintained wiki
-    ├── index.md            # top-level bucket directory
+    ├── index.md            # top-level bundle directory
     ├── log.tsv             # append-only run log (consolidate / refine / evaluate rows)
-    ├── _unsorted/          # quarantine for sources that matched no bucket
+    ├── _unsorted/          # quarantine for sources that matched no bundle
     ├── _eval/
     │   ├── questions.md    # fixed evaluation question set
     │   └── results.tsv     # per-question results across evaluate runs
@@ -43,9 +43,9 @@ vault/
     │   ├── build_index.py  # indexer (incremental; consolidate auto-chain runs it)
     │   ├── search.py       # query CLI — returns article pointers, never answers
     │   ├── index.db        # gitignored build artifact
-    │   └── okf_tools.py    # conformance check + per-bucket log.md generator
-    └── <bucket>/           # each bucket IS its own in-place OKF bundle
-        ├── index.md           # bucket router (OKF) — scope + topic list
+    │   └── okf_tools.py    # conformance check + per-bundle log.md generator
+    └── <bundle>/           # each bundle IS an in-place OKF bundle
+        ├── index.md           # bundle router (OKF) — scope + topic list
         ├── log.md             # derived OKF changelog (from log.tsv)
         └── <topic>/
             ├── index.md       # topic router (OKF) — description + article list
@@ -87,7 +87,7 @@ flowchart TB
 
 ### Two kinds of memory
 
-`Intelligence/` holds **semantic** memory — the buckets are facts:
+`Intelligence/` holds **semantic** memory — the bundles are facts:
 cited, indexed, interlinked articles. `Intelligence/_episodes/` holds
 **episodic** memory — the agent's record of *experiences* (goal →
 actions → outcome → insight): its own verb runs, plus date-keyed life
@@ -124,7 +124,7 @@ The fallback chain, end to end:
 flowchart TD
     Q["question"] --> T0{"tier 0 — snapshot<br/>already in context:<br/>does it answer?"}
     T0 -- "yes — zero file reads" --> A["answer directly,<br/>cite the articles it names"]
-    T0 -- no --> T1["tier 1 — index walk<br/>index.md → bucket index.md →<br/>topic index.md → ≤5 article bodies"]
+    T0 -- no --> T1["tier 1 — index walk<br/>index.md → bundle index.md →<br/>topic index.md → ≤5 article bodies"]
     T1 -- hit --> C["cited answer:<br/>(source: path) per claim"]
     T1 -- "miss / fuzzy phrasing" --> T2["tier 2 — hybrid search<br/>FTS5 keyword + local embeddings,<br/>RRF-merged"]
     T2 -- "pointers — never citable text" --> R["open and read<br/>the pointed articles"]
@@ -136,8 +136,8 @@ flowchart TD
 
 | Layer | Who creates it | Rule |
 |---|---|---|
-| **Buckets** (`Intelligence/<bucket>/`) | Human | Agent never invents a new bucket. Unroutable sources go to `_unsorted/`. |
-| **Topics** (`Intelligence/<bucket>/<topic>/`) | Agent | Agent creates topics during `consolidate` when no existing topic fits. |
+| **Bundles** (`Intelligence/<bundle>/`) | Human | Agent never invents a new bundle. Unroutable sources go to `_unsorted/`. |
+| **Topics** (`Intelligence/<bundle>/<topic>/`) | Agent | Agent creates topics during `consolidate` when no existing topic fits. |
 
 ### `schema.md` — the frozen harness
 
@@ -148,9 +148,9 @@ flowchart TD
 ## The verbs
 
 Four core verbs — `query`, `consolidate`, `refine`, `evaluate` — plus
-`reflect`, which maintains episodic memory. Each bucket is its own
+`reflect`, which maintains episodic memory. Each bundle is its own
 in-place OKF bundle (`index.md` routers + `type` frontmatter + a
-`related:` graph + a derived `log.md`), so a bucket's GitHub mirror is a
+`related:` graph + a derived `log.md`), so a bundle's GitHub mirror is a clean
 conformant bundle with no export step. **Every run is recall → act → capture:**
 the agent recalls relevant past episodes before acting and writes a new
 episode after, so experience accumulates across runs.
@@ -161,7 +161,7 @@ distilled, and re-indexed before it is committed:
 ```mermaid
 flowchart LR
     REC["recall<br/>≤3 episodes +<br/>reflections.md"] --> CON["consolidate<br/>route + write<br/>+ log"]
-    CON --> LOG["refresh bucket<br/>log.md (from log.tsv)"]
+    CON --> LOG["refresh bundle<br/>log.md (from log.tsv)"]
     LOG --> REF["refine<br/>read-only audit<br/>drift=N"]
     REF --> RFL["reflect<br/>distil episodes,<br/>regenerate snapshot.md"]
     RFL --> IDX["rebuild _search/<br/>index (incremental)"]
@@ -174,14 +174,14 @@ flowchart LR
 
 Pull only the relevant context, top-down:
 
-1. Read `Intelligence/index.md` — learn which buckets exist.
-2. Pick the best-fit bucket(s) from one-line descriptions.
-3. Read the bucket's `index.md` — pick topic(s).
+1. Read `Intelligence/index.md` — learn which bundles exist.
+2. Pick the best-fit bundle(s) from one-line descriptions.
+3. Read the bundle's `index.md` — pick topic(s).
 4. Read topic `index.md` files — pick which article bodies to load.
-5. Read only those articles. Follow `[[wiki links]]` within the same bucket only.
+5. Read only those articles. Follow `[[wiki links]]` within the same bundle only.
 6. Return answer with inline citations: `(source: path/to/article.md)`.
 
-**Budget rule:** at most 1 top `index.md` + 1–2 bucket `index.md` + a handful of topic `index.md` + ≤5 article bodies. Surface to the user if more is needed.
+**Budget rule:** at most 1 top `index.md` + 1–2 bundle `index.md` + a handful of topic `index.md` + ≤5 article bodies. Surface to the user if more is needed.
 
 **Tier-2 fallback:** if the walk misses (or the phrasing is too fuzzy to match index one-liners), run `python3 Intelligence/_search/search.py "<query>" --json` and treat the hits as routing candidates — open, read, and cite the pointed articles normally. A search call costs 0 toward the budget; the articles it routes to count as usual.
 
@@ -190,25 +190,25 @@ Pull only the relevant context, top-down:
 Ingest sources from `Resources/` into `Intelligence/`:
 
 1. Walk `Resources/` — skip folders with `include_in_consolidation: false`.
-2. Route each source to the best-fit bucket(s) using bucket `index.md` Scope paragraphs.
-   - No bucket fits → write to `_unsorted/`, flag in report.
-   - Multiple buckets fit → write into each (images copied into each).
-3. Within the bucket, pick or create a topic.
+2. Route each source to the best-fit bundle(s) using bundle `index.md` Scope paragraphs.
+   - No bundle fits → write to `_unsorted/`, flag in report.
+   - Multiple bundles fit → write into each (images copied into each).
+3. Within the bundle, pick or create a topic.
 4. Write the article (schema below). Copy images into the topic folder.
-5. Update `index.md` (bucket + topic routers), `log.tsv`, and the bucket's `log.md`.
+5. Update `index.md` (bundle + topic routers), `log.tsv`, and the bundle's `log.md`.
 6. Delete source if `delete_after_consolidation: true` (default).
 
-**Per-bucket workers:** one worker per bucket — run in parallel if the runtime supports it, otherwise sequentially. Only the orchestrator writes `_unsorted/`, `index.md`, `log.tsv`, and `_eval/results.tsv`.
+**Per-bundle workers:** one worker per bundle — run in parallel if the runtime supports it, otherwise sequentially. Only the orchestrator writes `_unsorted/`, `index.md`, `log.tsv`, and `_eval/results.tsv`.
 
 ### `refine`
 
 Read-only audit — report only, no writes:
 
-- Contradictions between articles within a bucket.
+- Contradictions between articles within a bundle.
 - Orphan articles (no inbound wiki links from other articles).
 - Concepts referenced but lacking their own article.
 - Index drift (files on disk not in indexes, or vice versa).
-- Cross-bucket wiki links (forbidden).
+- Cross-bundle wiki links (forbidden).
 - Broken image embeds.
 - Claims marked `(source: needs-verification)`.
 
@@ -261,10 +261,10 @@ One paragraph describing what lives here and any handling notes.
 | `delete_after_consolidation: true` | Sources deleted after successful consolidation (ephemeral material) |
 | Missing | Defaults to `true` / `true` |
 
-### `Intelligence/<bucket>/index.md` (bucket router)
+### `Intelligence/<bundle>/index.md` (bundle router)
 
 ```markdown
-# Bucket name
+# Bundle name
 
 **Scope**: One paragraph describing what belongs here and what does not.
 This is the routing signal the agent uses when allocating sources.
@@ -275,7 +275,7 @@ This is the routing signal the agent uses when allocating sources.
 - [[topic-b/_index|Topic B]] — one-line description
 ```
 
-### `Intelligence/<bucket>/<topic>/index.md` (topic router)
+### `Intelligence/<bundle>/<topic>/index.md` (topic router)
 
 ```markdown
 # Topic name
@@ -291,7 +291,7 @@ One paragraph describing what this topic clusters.
 - [[../other-topic/_index|Other Topic]] — one-line note
 ```
 
-`Related Topics` links same-bucket topics only — never cross-bucket.
+`Related Topics` links same-bundle topics only — never cross-bundle.
 
 ### Article
 
@@ -302,7 +302,7 @@ Each article opens with **OKF (Open Knowledge Format) YAML frontmatter** — the
 type: reference              # REQUIRED — the only mandatory field (your taxonomy)
 title: Article title         # matches the H1
 description: one sentence — what this is and its core thesis
-bucket: bucket-slug
+bundle: bundle-slug
 topic: topic-slug
 tags: [tag, tag]
 source: Resources/path/to/source.md   # or self-authored
@@ -310,7 +310,7 @@ resource:                    # live URL of the origin, when one exists
 timestamp: 2026-01-01T00:00:00Z
 status: active               # active | needs-verification | deprecated
 related:
-  - bucket/topic/other-article.md     # repo-relative; MAY cross buckets (OKF graph)
+  - bundle/topic/other-article.md     # repo-relative; MAY cross bundles (OKF graph)
 ---
 
 # Article title
@@ -336,7 +336,7 @@ Embed images with `![[image.png]]` — the file must live in the same topic fold
 
 ## Related
 
-- [[other-article-in-this-bucket]] · [other-article](../topic/other-article.md) — one-line note
+- [[other-article-in-this-bundle]] · [other-article](../topic/other-article.md) — one-line note
 ```
 
 `type` is the only required field (OKF prescribes no taxonomy — define your own type vocabulary). The `**Source:**` line and inline `(source: …)` citations stay. **Dual links:** `## Related` keeps the Obsidian `[[wiki link]]` *and* a relative-path link beside it, and mirrors every edge into the `related:` array — so Obsidian and a non-Obsidian OKF consumer both traverse. See *Open Knowledge Format* below.
@@ -356,7 +356,7 @@ Embed images with `![[image.png]]` — the file must live in the same topic fold
 Tab-separated, 9 columns. One row per processed source for `consolidate`; one summary row per run for `refine` and `evaluate`.
 
 ```
-timestamp  verb  source  bucket  topic  articles_changed  images_copied  status  notes
+timestamp  verb  source  bundle  topic  articles_changed  images_copied  status  notes
 ```
 
 - `status` — `kept` | `quarantined` | `crashed` | `refine_summary` | `eval_summary`
@@ -382,10 +382,10 @@ timestamp  question_id  files_read  answer_quality  notes
 
 | Component | What it counts |
 |---|---|
-| Orphans | Articles with zero inbound `[[wiki links]]` from other articles in their bucket |
+| Orphans | Articles with zero inbound `[[wiki links]]` from other articles in their bundle |
 | Index mismatches | Entries in any index that don't resolve to a real file, or files on disk not listed |
 | Broken embeds | `![[image.ext]]` references missing from the topic folder |
-| Cross-bucket links | Any `[[wiki link]]` that crosses bucket boundaries. **Relative-path / `related:` links are exempt** — they are the portable OKF graph and may cross buckets; only `[[ ]]` is walled |
+| Cross-bundle links | Any `[[wiki link]]` that crosses bundle boundaries. **Relative-path / `related:` links are exempt** — they are the portable OKF graph and may cross bundles; only `[[ ]]` is walled |
 | Schema violations | Articles missing required sections, factual claims without citations, or a missing required `type` frontmatter key |
 | Episode integrity | Episodes missing required frontmatter/sections, or any `[[ ]]` link inside an episode that points outside `_episodes/` (episodes reference articles by `(source: …)` citation only) |
 
@@ -397,20 +397,20 @@ The orchestrator compares the current drift count to the previous `refine_summar
 
 The wiki is [OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)-native: a directory of markdown files, one concept per file, each carrying YAML frontmatter (`type` required, the rest optional) and cross-linked into a graph. That is exactly the shape this engine already had — so OKF here is a thin conformance + portability layer, not a different model.
 
-**The bucket is the bundle — no export step.** Each `Intelligence/<bucket>/` directory is *itself* a conformant OKF bundle: `index.md` routers, articles with `type` frontmatter, a `related:` cross-bucket graph, and a derived `log.md`. Point a bucket at a git mirror (this engine syncs buckets out via Unison) and the mirror *is* a clean OKF bundle, refreshed by the normal sync with nothing to export.
+**The live bundle is the OKF surface — no export step.** Each `Intelligence/<bundle>/` directory is *itself* a conformant OKF bundle: `index.md` routers, articles with `type` frontmatter, a `related:` cross-bundle graph, and a derived `log.md`. Point a bundle at a git mirror (this engine syncs bundles out via Unison) and the mirror *is* a clean OKF bundle, refreshed by the normal sync with nothing to export.
 
-**Dual-link model.** The vault keeps Obsidian `[[wiki links]]` (same-bucket only — the routing graph the `query` walk follows). In parallel every article carries a `related:` frontmatter array of repo-relative paths that **may cross buckets** — the portable, machine-readable OKF graph a non-Obsidian consumer traverses. The `[[ ]]` stay for Obsidian; nothing rewrites the live files.
+**Dual-link model.** The vault keeps Obsidian `[[wiki links]]` (same-bundle only — the routing graph the `query` walk follows). In parallel every article carries a `related:` frontmatter array of repo-relative paths that **may cross bundles** — the portable, machine-readable OKF graph a non-Obsidian consumer traverses. The `[[ ]]` stay for Obsidian; nothing rewrites the live files.
 
 ```mermaid
 flowchart LR
-    subgraph bucket ["Intelligence/&lt;bucket&gt;/ — the live bucket = the bundle"]
+    subgraph bundle ["Intelligence/&lt;bundle&gt;/ — the live bundle = the OKF surface"]
         direction TB
         A["articles<br/>OKF type frontmatter"]
         A --- I["index.md routers<br/>+ derived log.md"]
         A --- W["[[ wikilinks ]]<br/>Obsidian routing graph"]
-        A --- RL["related: array<br/>portable graph, may cross buckets"]
+        A --- RL["related: array<br/>portable graph, may cross bundles"]
     end
-    bucket -->|"Unison sync (auto)"| M["GitHub mirror repo<br/>= conformant OKF bundle"]
+    bundle -->|"Unison sync (auto)"| M["GitHub mirror repo<br/>= conformant OKF bundle"]
     M --> G["GitHub folder view"]
     M --> C["other agents / search indexers"]
     M --> H["static HTML visualiser"]
@@ -423,13 +423,13 @@ Why a format and not a service: a bundle is **just files** — readable in any e
 ## Hard rules
 
 1. **`Resources/` is immutable** during a run. Only post-consolidate deletions are allowed.
-2. **Wiki links are same-bucket only.** An article duplicated into two buckets is copied, not linked. This walls `[[ ]]` edges only — the parallel relative-path / `related:` channel is the portable OKF graph and may cross buckets.
-3. **No silent bucket creation.** Unroutable sources go to `_unsorted/`.
+2. **Wiki links are same-bundle only.** An article duplicated into two bundles is copied, not linked. This walls `[[ ]]` edges only — the parallel relative-path / `related:` channel is the portable OKF graph and may cross bundles.
+3. **No silent bundle creation.** Unroutable sources go to `_unsorted/`.
 4. **Topic creation is allowed and expected.** No existing topic → agent creates one.
 5. **Images live beside their article.** No cross-folder image references.
 6. **Indexes and log stay in sync, every run.** Stale indexes silently degrade retrieval — enforced, not advisory.
 7. **File names are `lowercase-with-hyphens`.**
-8. **Single locus of change.** Per-bucket workers write only inside their assigned subtree. The orchestrator is the sole writer of `index.md`, `log.tsv`, `_unsorted/`, `_eval/results.tsv`, and `_episodes/`.
+8. **Single locus of change.** Per-bundle workers write only inside their assigned subtree. The orchestrator is the sole writer of `index.md`, `log.tsv`, `_unsorted/`, `_eval/results.tsv`, and `_episodes/`.
 9. **Schema is frozen.** No verb may modify `schema.md`.
 
 ---
@@ -437,7 +437,7 @@ Why a format and not a service: a bundle is **just files** — readable in any e
 ## Getting started
 
 1. Clone this repo as your vault root.
-2. Replace the placeholder `domain-a` / `domain-b` buckets with your own macro taxonomy. Each bucket needs an `index.md` router with a Scope paragraph.
+2. Replace the placeholder `domain-a` / `domain-b` bundles with your own macro taxonomy. Each bundle needs an `index.md` router with a Scope paragraph.
 3. Replace or extend `_eval/questions.md` with questions your vault should be able to answer. These are your benchmark — be specific.
 4. Fill in `Resources/personal/about-me.md` and `Resources/personal/writing-rules.md` with your own identity and style notes. These are prescriptive — the agent preserves your wording rather than paraphrasing.
 5. Drop source material into `Resources/<folder>/` with a `README.md` declaring the consolidation flags.
@@ -559,9 +559,9 @@ ls Resources/context/session-*.md
 ## Design notes
 
 - **Progressive disclosure.** The agent walks indexes top-down and reads article bodies only when needed, keeping the context window lean regardless of vault size. **Episodic recall obeys the same discipline:** a bounded tag-matched walk (≤3 episode bodies) plus a `reflections.md` that *compresses* many episodes into a few generalized lines, so recall cost stays roughly constant even as the episode store grows.
-- **Two kinds of memory.** Semantic memory (buckets = facts) answers "what is true?"; episodic memory (`_episodes/` = experiences) answers "what happened, and what worked last time?" Recalling episodes at run-start lets curation and retrieval compound across runs instead of restarting cold — and `reflect` distils experience into reusable heuristics without ever touching the frozen `CLAUDE.md` / `schema.md` bedrock.
-- **Human taxonomy, agent clustering.** Buckets are yours to design. Topics emerge from the material. This split keeps macro structure stable while micro-structure adapts.
+- **Two kinds of memory.** Semantic memory (bundles = facts) answers "what is true?"; episodic memory (`_episodes/` = experiences) answers "what happened, and what worked last time?" Recalling episodes at run-start lets curation and retrieval compound across runs instead of restarting cold — and `reflect` distils experience into reusable heuristics without ever touching the frozen `CLAUDE.md` / `schema.md` bedrock.
+- **Human taxonomy, agent clustering.** Bundles are yours to design. Topics emerge from the material. This split keeps macro structure stable while micro-structure adapts.
 - **Self-contained articles.** Images are copied into topic folders on consolidation so source deletion never breaks article embeds.
-- **Per-bucket workers.** One worker per bucket — parallel where the runtime supports it, sequential otherwise — means consolidation scales with bucket count, not vault size.
-- **Quarantine over guessing.** An article the agent can't route goes to `_unsorted/` and surfaces in the run report — never silently into a wrong bucket.
+- **Per-bundle workers.** One worker per bundle — parallel where the runtime supports it, sequential otherwise — means consolidation scales with bundle count, not vault size.
+- **Quarantine over guessing.** An article the agent can't route goes to `_unsorted/` and surfaces in the run report — never silently into a wrong bundle.
 - **Measurable quality.** The `evaluate` verb gives the wiki a fixed benchmark. `files_read` is the primary signal: a well-structured wiki should answer questions in fewer reads as consolidation matures.
