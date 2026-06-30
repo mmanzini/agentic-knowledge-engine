@@ -2,7 +2,7 @@
 type: reference
 title: Third article — secret rotation as political problem
 description: Long-lived credentials persist not for technical reasons but for political ones: rotation requires breaking external consumers, and platform teams rarely have the air cover to do so on a schedule.
-bucket: domain-b
+bundle: domain-b
 topic: topic-three
 tags: []
 source: Sample transcription — interview with a platform engineer
@@ -62,4 +62,4 @@ needs-verification).
 
 ## Related
 
-(no within-bucket links yet — this is currently the only article in Domain B)
+(no within-bundle links yet — this is currently the only article in Domain B)

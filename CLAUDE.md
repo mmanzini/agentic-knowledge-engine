@@ -12,11 +12,11 @@ improve agent behaviour; never edit `schema.md` mid-run.
   (see the README flag), but otherwise never modifies this tree.
 - **`Intelligence/`** — the wiki. Long-term memory, agent-maintained.
   Two layers inside it:
-  - **Buckets** (`Intelligence/<bucket>/`) — **user-curated** macro
+  - **Bundles** (`Intelligence/<bundle>/`) — **user-curated** macro
     groups. Each has a `index.md` declaring its scope. The
-    agent **never** invents a new bucket; quarantine to `_unsorted/`
+    agent **never** invents a new bundle; quarantine to `_unsorted/`
     instead.
-  - **Topics** (`Intelligence/<bucket>/<topic>/`) — **agent-curated**
+  - **Topics** (`Intelligence/<bundle>/<topic>/`) — **agent-curated**
     clusters created during `consolidate`. Topic creation is allowed
     and expected.
 - **`Skills/`** — agent skill definitions. Read-only for vault verbs
@@ -52,7 +52,7 @@ pipeline.
    session. Do not edit it.
 2. Read this file (the verbs and orchestration rules below).
 3. Read **both** thin routers when entering the wiki for a `query` or
-   `consolidate`: `Intelligence/index.md` (the bucket router) **and**
+   `consolidate`: `Intelligence/index.md` (the bundle router) **and**
    `Intelligence/_episodes/_index.md` (the episodic-memory router).
    Both are body-free — load them first, then drill down on demand.
    Recall (see *Episodic memory*) walks the episode router.
@@ -62,9 +62,9 @@ pipeline.
 The vault has five verbs: **`query`** (read), **`consolidate`**
 (write from `Resources/`), **`refine`** (audit, read-only),
 **`evaluate`** (measure), and **`reflect`** (maintain episodic
-memory). Each bucket is its own in-place OKF bundle (per-article
+memory). Each bundle is its own in-place OKF bundle (per-article
 `type` frontmatter + a `related:` graph + a derived `log.md`), so a
-bucket's GitHub mirror is a conformant bundle with no export step.
+bundle's GitHub mirror is a conformant bundle with no export step.
 Schemas, hard rules,
 log/eval formats, and the drift-count definition all live in
 `schema.md`. The recall/capture mechanics that wrap every verb live in
@@ -81,26 +81,26 @@ question, answer directly and cite the articles/episodes it names.
 Otherwise run the walk below (tier 1), falling back to hybrid search
 (tier 2, step 8) only when the walk misses.
 
-1. **Start at `Intelligence/index.md`.** Learn which buckets exist.
-2. **Pick the bucket(s).** Match against the one-line bucket
-   descriptions and, if needed, the bucket's `index.md`
-   Scope paragraph. If no bucket fits, say so and stop. Don't
+1. **Start at `Intelligence/index.md`.** Learn which bundles exist.
+2. **Pick the bundle(s).** Match against the one-line bundle
+   descriptions and, if needed, the bundle's `index.md`
+   Scope paragraph. If no bundle fits, say so and stop. Don't
    guess into `_unsorted/` — it's a quarantine, not a search target
    unless the user explicitly asks.
-3. **Pick the topic(s) within the chosen bucket(s).** Read the
-   bucket's `index.md` Topics list and, if disambiguation is
+3. **Pick the topic(s) within the chosen bundle(s).** Read the
+   bundle's `index.md` Topics list and, if disambiguation is
    needed, the candidate topics' `index.md` description paragraphs.
    **Do not load article bodies yet.**
 4. **Read articles.** Within the chosen topic(s), use the topic
    `index.md` Articles list (each article has a one-line
    description) to pick which article files to actually read.
    Pull only those. The topic's `Related Topics` block tells you
-   where to step sideways within the same bucket.
-5. **Stop at bucket boundaries.** Wiki links inside articles are
-   guaranteed same-bucket only, so following them during query is
-   safe. If a question genuinely spans buckets, repeat the process
-   per bucket and return parallel answers — never assume
-   cross-bucket continuity.
+   where to step sideways within the same bundle.
+5. **Stop at bundle boundaries.** Wiki links inside articles are
+   guaranteed same-bundle only, so following them during query is
+   safe. If a question genuinely spans bundles, repeat the process
+   per bundle and return parallel answers — never assume
+   cross-bundle continuity.
 6. **Cite back.** Every fact in the answer cites the article path
    it came from, in the same `(source: <path>)` form articles use
    internally.
@@ -108,7 +108,7 @@ Otherwise run the walk below (tier 1), falling back to hybrid search
    `index.md` + a handful of topic `index.md` + the article
    bodies actually needed. If a question seems to require more
    than 5 article bodies, surface that to the user before
-   continuing — usually the question is too broad or the buckets
+   continuing — usually the question is too broad or the bundles
    are mis-cut. A tier-2 search (step 8) costs **0** toward the
    5-article ceiling; the articles it routes to count normally.
 8. **Tier-2 fallback — hybrid search.** If the walk found nothing,
@@ -121,7 +121,7 @@ Otherwise run the walk below (tier 1), falling back to hybrid search
    misses, say the answer is not in the wiki — same honesty rule as
    step 2. (Index missing → run
    `python3 Intelligence/_search/build_index.py` first.)
-A `personal` bucket (if your vault has one) needs no special handling:
+A `personal` bundle (if your vault has one) needs no special handling:
 its `index.md` description carries the routing signal — walked when the
 task is generative or personal-context-relevant, skipped for pure
 tech/reference work — so step 2 routes there normally. Recall (see
@@ -142,7 +142,7 @@ Then proceed.
 0. **Quarantine pre-step.** List the contents of
    `Intelligence/_unsorted/` (excluding `_index.md`). If anything is
    there, surface it to the human and ask, per article: **create a
-   new bucket / route to an existing bucket / delete**. Apply the
+   new bundle / route to an existing bundle / delete**. Apply the
    chosen resolution and append a `log.tsv` row per resolved article
    (`status=kept` with `notes=quarantine resolved: <action>`) before
    processing any new sources. This prevents `_unsorted/` from
@@ -174,27 +174,27 @@ Then proceed.
    **Scope comes from evidence, not memory.** Always derive virgin/fresh
    scope from `log.tsv` + `git`, never from recalled prior runs. Recall
    informs *routing*, not *scope* — run the scan every time.
-2. For every remaining source file, pick the best-fit **bucket(s)**
+2. For every remaining source file, pick the best-fit **bundle(s)**
    by comparing content against each
-   `Intelligence/<bucket>/index.md` Scope paragraph.
-   - No bucket fits → write the article into
+   `Intelligence/<bundle>/index.md` Scope paragraph.
+   - No bundle fits → write the article into
      `Intelligence/_unsorted/`, append a row with
      `status=quarantined` to `log.tsv`, and flag it in the run
-     report. **Never silently invent a bucket.**
-   - Two or more buckets fit → write the article into each, with
+     report. **Never silently invent a bundle.**
+   - Two or more bundles fit → write the article into each, with
      images copied into each per `schema.md` *Image handling*.
    - Article already in the target topic's `index.md` → skip. (Log
      absence is **not** a skip signal — see step 1.)
-3. Within the chosen bucket, pick the best-fit **topic** by
+3. Within the chosen bundle, pick the best-fit **topic** by
    comparing content against each `<topic>/index.md` description.
    No topic fits → **create a new topic folder** with its
-   `index.md` and add it to the bucket's `index.md`.
+   `index.md` and add it to the bundle's `index.md`.
 4. Write or update the article using the *Article schema* from
    `schema.md`. Copy any referenced images into the topic folder.
    **Frontmatter (OKF):** open every written/updated article with the
-   YAML frontmatter block — `type` (default from the bucket per the
+   YAML frontmatter block — `type` (default from the bundle per the
    *Article type vocabulary*, override when a more specific type fits),
-   `title`, `description`, `bucket`, `topic`, `tags`, `source`,
+   `title`, `description`, `bundle`, `topic`, `tags`, `source`,
    `resource` (live URL when the origin has one), `timestamp` (this
    run, ISO 8601 UTC), `status`, and the `related:` array. Body shape
    and inline `(source: …)` citations are unchanged.
@@ -202,18 +202,18 @@ Then proceed.
    `[[slug]] · [title](../<topic>/<article>.md)` (Obsidian wikilink +
    portable relative path), and mirror every relation into the
    frontmatter `related:` array as a repo-relative path. `[[ ]]` stays
-   same-bucket (hard rule 2); `related:`/relative paths **may** cross
-   buckets (the portable OKF graph). When updating an existing article,
+   same-bundle (hard rule 2); `related:`/relative paths **may** cross
+   bundles (the portable OKF graph). When updating an existing article,
    add the new inbound `related:`/Related entry on the other side too.
 5. Update the topic's `index.md` (add the article, refresh
    `Related Topics` if needed).
-6. Update the bucket's `index.md` if a new topic was
+6. Update the bundle's `index.md` if a new topic was
    created.
-7. Update `Intelligence/index.md` only if a bucket was first-touched
+7. Update `Intelligence/index.md` only if a bundle was first-touched
    (rare).
 8. Append one row per processed source to `Intelligence/log.tsv`
    in the format defined in `schema.md`. The orchestrator is the
-   sole writer of `log.tsv` (per-bucket workers emit row data; the
+   sole writer of `log.tsv` (per-bundle workers emit row data; the
    orchestrator appends).
 9. For each successfully consolidated source, honour
    `delete_after_consolidation`:
@@ -223,9 +223,9 @@ Then proceed.
    - On any failure for that file, leave in place regardless and
      log `status=crashed` with the error in `notes`.
 10. **Auto-chain.** After consolidate finishes:
-    - **Refresh each touched bucket's in-place OKF `log.md`:**
-      `python3 Intelligence/_search/okf_tools.py --log <bucket> [<bucket> …]`
-      (derived from `log.tsv`) — this is what makes the live bucket a
+    - **Refresh each touched bundle's in-place OKF `log.md`:**
+      `python3 Intelligence/_search/okf_tools.py --log <bundle> [<bundle> …]`
+      (derived from `log.tsv`) — this is what makes the live bundle a
       self-describing OKF bundle its mirror publishes; there is no
       separate export step.
     - Run `refine` then `reflect` (see *Orchestration rules*); surface
@@ -234,9 +234,9 @@ Then proceed.
       (`python3 Intelligence/_search/build_index.py` — incremental,
       cheap) so search never goes stale silently.
 
-**Per-bucket workers.** One worker per bucket, run in parallel if the
+**Per-bundle workers.** One worker per bundle, run in parallel if the
 runtime supports it, otherwise sequentially (an optimisation, not a
-correctness requirement). Each writes only inside its own bucket and
+correctness requirement). Each writes only inside its own bundle and
 returns row data + touched paths to the orchestrator; the orchestrator
 is the sole writer of the shared files — see *Orchestration rules*
 (hard rule 8).
@@ -257,15 +257,15 @@ cite flow.
 ### `refine`
 
 Read-only audit. **Report findings; do not change anything.** Per
-bucket, in parallel; one orchestrator-written summary row.
+bundle, in parallel; one orchestrator-written summary row.
 
 Audit the **drift-count** components defined in `schema.md` *Drift
-count* (orphans, index mismatches, broken embeds, cross-bucket links,
+count* (orphans, index mismatches, broken embeds, cross-bundle links,
 schema violations, episode integrity) and sum them into `drift=<N>`.
 
 Also report (do not count toward drift; track separately in `notes`):
 
-- **Contradictions between articles** within a bucket.
+- **Contradictions between articles** within a bundle.
 - **Concepts referenced but lacking their own article.**
 - **Claims marked `(source: needs-verification)`** so the user can
   decide whether to chase them.
@@ -274,7 +274,7 @@ Also report (do not count toward drift; track separately in `notes`):
   prune. Propose, do not apply. Apply the autoresearch simplicity
   criterion: *equal information content + simpler structure = win*.
 - **Topic obesity** — any topic whose folder contains more than 25
-  article files. List as `split_candidate=<bucket>/<topic>:<count>`
+  article files. List as `split_candidate=<bundle>/<topic>:<count>`
   in `notes`. The topic's `index.md` becomes too long to serve its
   routing purpose at that size; flag for human decision (split into
   sibling topics or accept the cost).
@@ -342,7 +342,7 @@ recall/capture mechanics are described in *Episodic memory* below.
    recall surface (kept on disk for audit).
 4. **Regenerate `_episodes/snapshot.md`** — the tier-0 session-start
    injection (see *Memory tiers*). Contents, in order: identity
-   digest (one-liners from the `personal`-equivalent bucket's
+   digest (one-liners from the `personal`-equivalent bundle's
    prescriptive articles), the full `reflections.md` patterns, the
    ~5 most recent undistilled episode one-liners, and any open
    decisions. **Hard cap ≈1,500 tokens** (~6,000 characters) — trim
@@ -361,7 +361,7 @@ while fresh. Never edits `CLAUDE.md` or `schema.md`.
 
 ## Episodic memory
 
-The buckets are **semantic** memory (facts). `Intelligence/_episodes/`
+The bundles are **semantic** memory (facts). `Intelligence/_episodes/`
 is **episodic** memory — the agent's record of *experiences*
 (goal → actions → outcome → insight). It exists so the agent stops
 re-deriving the same decisions every run and instead **recalls** what
@@ -377,7 +377,7 @@ capture after. This wraps `query`, `consolidate`, `refine`, and
 ### Recall (run-start, bounded)
 
 Before acting, walk `_episodes/` the same top-down way `query` walks
-buckets — **bodies last, hard budget**:
+bundles — **bodies last, hard budget**:
 
 1. Read `_episodes/_index.md` (router) → pick the relevant kind(s):
    `operational` for routing/retrieval decisions, `life`+`signals` for
@@ -395,7 +395,7 @@ this, here's what I did and what happened." Recall cost is bounded
 (≈ router + kind-index + ≤3 bodies + reflections), not growing with
 the store. For generative/personal tasks, recall's tag-match naturally
 surfaces the relevant `life`/`signals` episodes — no separate mechanism;
-the `personal` bucket itself is reached by the normal `query` walk.
+the `personal` bundle itself is reached by the normal `query` walk.
 
 ### Capture (run-end + inline)
 
@@ -421,18 +421,18 @@ within it); the orchestrator is its sole writer (*Orchestration rules*).
 
 ## Orchestration rules
 
-- **One orchestrator per run.** Runs the per-bucket workers (in
+- **One orchestrator per run.** Runs the per-bundle workers (in
   parallel if the runtime supports it, otherwise sequentially),
   collects their reports, and is the **sole writer** of
   `Intelligence/index.md`, `Intelligence/log.tsv`,
   `Intelligence/_unsorted/`, `Intelligence/_eval/results.tsv`, and
   `Intelligence/_episodes/`.
-- **Worker scope.** A worker assigned to bucket `X` writes
+- **Worker scope.** A worker assigned to bundle `X` writes
   **only** inside `Intelligence/X/`. Any attempt to write outside
   is a hard-rule-8 violation and aborts the worker.
 - **Auto-chain.** `consolidate` → `refine` → `reflect`, always, in that
   order. `evaluate` runs on user request and is recommended after any
-  structurally significant `consolidate` (new bucket touched, >3
+  structurally significant `consolidate` (new bundle touched, >3
   articles written) so the read-cost trajectory stays visible.
 - **Run summary format.** Every run report ends with one line:
   `run=<verb> advance|hold|regress drift=<N> Δdrift=<±N>` (for
@@ -453,10 +453,10 @@ within it); the orchestrator is its sole writer (*Orchestration rules*).
 
 Two failure modes look similar but route differently:
 
-- **No bucket fits** → article goes to `Intelligence/_unsorted/`,
-  `status=quarantined`, human creates a bucket and re-runs.
+- **No bundle fits** → article goes to `Intelligence/_unsorted/`,
+  `status=quarantined`, human creates a bundle and re-runs.
 - **Sources within a single article disagree** → article is
-  written into its proper bucket/topic with the contradiction noted
+  written into its proper bundle/topic with the contradiction noted
   inline per the citation rules. `refine` lists it.
 
 `_unsorted/` is for routing failures, not factual disagreements.
@@ -466,10 +466,10 @@ Two failure modes look similar but route differently:
 This file is `program.md`-shaped: edit it to improve agent
 behaviour. Examples of changes that belong here (not in `schema.md`):
 
-- Tightening the bucket-routing heuristic in `consolidate` step 2.
+- Tightening the bundle-routing heuristic in `consolidate` step 2.
 - Adjusting the read-budget ceiling in `query` step 7.
 - Adding new orchestration rules.
-- Adding a new verb (e.g. `summarize` for whole-bucket digests).
+- Adding a new verb (e.g. `summarize` for whole-bundle digests).
 
 Examples of changes that belong in `schema.md` (require deliberate
 human commit):

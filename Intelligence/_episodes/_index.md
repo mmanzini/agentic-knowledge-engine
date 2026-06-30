@@ -1,9 +1,9 @@
 # Episodes — episodic memory
 
 The agent's record of **experiences** (goal → actions → outcome →
-insight), distinct from the **semantic** facts held in the buckets.
+insight), distinct from the **semantic** facts held in the bundles.
 This is a governance zone like `_eval/` and `_unsorted/` — not a
-bucket. The `query` bucket-walk ignores it; episodic **recall** is a
+bundle. The `query` bundle-walk ignores it; episodic **recall** is a
 separate, bounded retrieval path. The orchestrator is the sole writer.
 
 See *Episodic memory contracts* in [schema.md](../../schema.md) for the
@@ -34,12 +34,12 @@ replace them as your own runs accumulate.
 ## Tag vocabulary
 
 Tags are the recall routing signal (the kind-index one-liners + each
-episode's frontmatter `tags`). Keep them aligned with your bucket/topic
+episode's frontmatter `tags`). Keep them aligned with your bundle/topic
 slugs so recall can match a task to past experience. Seed vocabulary
 (extend as the store grows):
 
-- **bucket/topic tags** — mirror your bucket and topic slugs
+- **bundle/topic tags** — mirror your bundle and topic slugs
   (e.g. `domain-a`, `topic-one`).
 - **source-type tags** — `daily-digest`, `auto-capture`,
   `web-clipping`, `transcription`.
-- **outcome tags** — `quarantine`, `new-topic`, `multi-bucket`.
+- **outcome tags** — `quarantine`, `new-topic`, `multi-bundle`.

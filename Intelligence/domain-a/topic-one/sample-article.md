@@ -2,7 +2,7 @@
 type: reference
 title: Sample article — coordination overhead in software teams
 description: Smaller teams ship faster than larger ones because the number of coordination edges grows quadratically with team size, while output grows roughly linearly.
-bucket: domain-a
+bundle: domain-a
 topic: topic-one
 tags: []
 source: https://example.com/small-teams-ship-faster

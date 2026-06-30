@@ -9,4 +9,4 @@ the article schema, citation rules, and image co-location.
 
 ## Related Topics
 
-- [[../topic-two/index|Topic Two]] — companion topic in the same bucket; cross-linked from `sample-article`.
+- [[../topic-two/index|Topic Two]] — companion topic in the same bundle; cross-linked from `sample-article`.

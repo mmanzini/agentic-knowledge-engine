@@ -23,41 +23,41 @@ These are non-negotiable. A run that violates any of them is a bug.
 1. **`Resources/` is immutable** during read. The only writes are
    post-`consolidate` deletions of sources whose parent folder has
    `delete_after_consolidation: true` (or unset).
-2. **`[[wiki links]]` are same-bucket only.** Free across topics
-   inside a bucket; **never** across buckets. An article that needs
-   to exist in two buckets is duplicated, not linked. This wall applies
+2. **`[[wiki links]]` are same-bundle only.** Free across topics
+   inside a bundle; **never** across bundles. An article that needs
+   to exist in two bundles is duplicated, not linked. This wall applies
    to `[[ ]]` edges *only* — the parallel relative-path / frontmatter
    `related:` channel (see *Article schema*) is the portable OKF graph
-   and **may** cross buckets. The `query` walk follows `[[ ]]` only, so
-   its same-bucket guarantee is intact.
-3. **No silent bucket creation.** Sources matching no existing bucket
+   and **may** cross bundles. The `query` walk follows `[[ ]]` only, so
+   its same-bundle guarantee is intact.
+3. **No silent bundle creation.** Sources matching no existing bundle
    go to `Intelligence/_unsorted/` and surface in the run report.
 4. **Topic creation is allowed and expected.** When no existing topic
-   in the chosen bucket fits, create one with its `index.md` and
-   register it in the bucket's `index.md`.
+   in the chosen bundle fits, create one with its `index.md` and
+   register it in the bundle's `index.md`.
 5. **Images live with their articles.** Every `![[...]]` embed must
    resolve to a file in the same topic folder. No cross-folder image
-   references. Duplicating an article into two buckets means copying
+   references. Duplicating an article into two bundles means copying
    the image into each.
 6. **Indexes and log stay in sync, every run.** A `consolidate` that
-   touches a bucket must update the topic's `index.md` (always), the
-   bucket's `index.md` (if a topic was created), and
+   touches a bundle must update the topic's `index.md` (always), the
+   bundle's `index.md` (if a topic was created), and
    `Intelligence/log.tsv` (always — one append per processed source).
-   `Intelligence/index.md` only changes on first-touch of a bucket.
+   `Intelligence/index.md` only changes on first-touch of a bundle.
    The `query` verb relies on these indexes being truthful — stale
    indexes silently degrade retrieval, so this is enforced as a hard
    rule, not a courtesy. `refine` flags any drift it finds.
 7. **File names are `lowercase-with-hyphens`.** Both folders and
    files. Article slugs match this convention.
 8. **Single locus of change.** During a parallel `consolidate` or
-   `refine`, each per-bucket subagent writes **only** inside its
-   assigned `Intelligence/<bucket>/` subtree. The **orchestrator** is
+   `refine`, each per-bundle subagent writes **only** inside its
+   assigned `Intelligence/<bundle>/` subtree. The **orchestrator** is
    the sole writer of `Intelligence/index.md`,
    `Intelligence/log.tsv`, `Intelligence/_unsorted/`,
    `Intelligence/_eval/results.tsv`, and `Intelligence/_episodes/`.
    This eliminates write races and
    matches autoresearch's "one file is the locus of change" principle
-   — adapted to a per-bucket fan-out.
+   — adapted to a per-bundle fan-out.
 9. **Schema is frozen.** This file (`Vault/schema.md`) is read-only
    to the agent. No verb may edit it.
 
@@ -96,12 +96,12 @@ The two flags are independent:
 - Default if either field is missing: `include_in_consolidation: true`,
   `delete_after_consolidation: true`.
 
-### `Intelligence/<bucket>/index.md` (bucket router)
+### `Intelligence/<bundle>/index.md` (bundle router)
 
 ```markdown
-# <Bucket name>
+# <Bundle name>
 
-**Scope**: One paragraph describing what belongs in this bucket and
+**Scope**: One paragraph describing what belongs in this bundle and
 what does not. This is the routing signal the agent uses when
 allocating new articles.
 
@@ -111,7 +111,7 @@ allocating new articles.
 - ...
 ```
 
-### `Intelligence/<bucket>/<topic>/index.md` (topic router)
+### `Intelligence/<bundle>/<topic>/index.md` (topic router)
 
 ```markdown
 # <Topic name>
@@ -129,7 +129,7 @@ One paragraph describing what this topic clusters.
 - ...
 ```
 
-`Related Topics` may link to other topics **within the same bucket only**.
+`Related Topics` may link to other topics **within the same bundle only**.
 
 ### Article schema
 
@@ -144,7 +144,7 @@ external OKF consumer. The body is unchanged; frontmatter is additive.
 type: <one of the type vocabulary — see *Article type vocabulary* below>   # REQUIRED
 title: <Article title — matches the H1>
 description: <one sentence — what this article is and its core thesis>
-bucket: <bucket-slug>
+bundle: <bundle-slug>
 topic: <topic-slug>
 tags: [tag, tag, …]
 source: <primary source path under Resources/, or self-authored>
@@ -152,7 +152,7 @@ resource: <live URL of the origin when one exists, else omit/blank>
 timestamp: <ISO 8601 UTC of the last consolidate touch>
 status: active | needs-verification | deprecated
 related:
-  - <bucket>/<topic>/<article>.md      # repo-relative; MAY cross buckets (OKF graph)
+  - <bundle>/<topic>/<article>.md      # repo-relative; MAY cross bundles (OKF graph)
   - …
 ---
 
@@ -181,7 +181,7 @@ same topic folder as the article — see *Image handling* below.
 
 ## Related
 
-- [[<other-article-in-this-bucket>]] · [<title>](../<topic>/<article>.md) — one-line note
+- [[<other-article-in-this-bundle>]] · [<title>](../<topic>/<article>.md) — one-line note
 ```
 
 **Required frontmatter key:** `type` (the only mandatory field, mirroring
@@ -192,19 +192,19 @@ rules* are unchanged. `source`/`resource` duplicate provenance in a
 queryable field; the inline citations remain the per-claim record.
 
 **Dual-link channel.** The `## Related` block keeps the Obsidian
-`[[wiki link]]` (same-bucket only, hard rule 2) **and** adds a
+`[[wiki link]]` (same-bundle only, hard rule 2) **and** adds a
 relative-path markdown link beside it, so both a) Obsidian's graph and
 the `query` walk and b) an external OKF consumer outside Obsidian can
 traverse. The frontmatter `related:` array is the canonical
-machine-readable edge list and **may cross buckets** (the portable OKF
-graph). See *Cross-bucket links* under *Drift count*.
+machine-readable edge list and **may cross bundles** (the portable OKF
+graph). See *Cross-bundle links* under *Drift count*.
 
 ### Article type vocabulary
 
 `type` is the only OKF-required field and takes any string — OKF
 prescribes **no** taxonomy (its `Table`/`Metric`/`Runbook` examples are
 illustrative of one producer's data catalogue, not a fixed enum). Define
-your own vocabulary that fits your buckets. A reasonable starter set:
+your own vocabulary that fits your bundles. A reasonable starter set:
 
 | `type` | Use for |
 |---|---|
@@ -214,7 +214,7 @@ your own vocabulary that fits your buckets. A reasonable starter set:
 | `digest` | date-keyed daily/periodic summaries |
 | `profile` | identity / personal-context articles |
 
-`consolidate` defaults `type` from the bucket (default per the table above), and may override per-article
+`consolidate` defaults `type` from the bundle (default per the table above), and may override per-article
 when a more specific type fits. An unrecognised `type` value is not a
 drift violation (OKF treats it as an opaque facet).
 
@@ -246,13 +246,13 @@ one):
 1. Locate the image in `Resources/` (it should sit beside the source
    file that references it).
 2. **Copy** the image file into the article's topic folder
-   (`Intelligence/<bucket>/<topic>/`). Don't link out to `Resources/`
+   (`Intelligence/<bundle>/<topic>/`). Don't link out to `Resources/`
    — articles must remain self-contained so deleting the source after
    consolidation doesn't break embeds.
 3. Reference the image with `![[image-filename.ext]]` — Obsidian
    resolves it from the same folder.
 4. If the same image is referenced by articles in two different
-   topics (or two buckets) during a duplication, copy it into each
+   topics (or two bundles) during a duplication, copy it into each
    topic folder. Storage cost is trivial; the self-containment
    property matters more.
 
@@ -272,7 +272,7 @@ processed source for `consolidate`; one summary row per run for
 Columns (9, in order):
 
 ```
-timestamp	verb	source	bucket	topic	articles_changed	images_copied	status	notes
+timestamp	verb	source	bundle	topic	articles_changed	images_copied	status	notes
 ```
 
 - `timestamp` — ISO 8601 UTC (`2026-04-26T14:32:01Z`).
@@ -280,8 +280,8 @@ timestamp	verb	source	bucket	topic	articles_changed	images_copied	status	notes
 - `source` — path under `Resources/` for `consolidate` rows;
   `(refine)` for refine summary rows; `(evaluate)` for evaluate
   summary rows.
-- `bucket` — the bucket touched, `_unsorted` for quarantine,
-  `(all)` for cross-bucket summary rows, empty if not applicable.
+- `bundle` — the bundle touched, `_unsorted` for quarantine,
+  `(all)` for cross-bundle summary rows, empty if not applicable.
 - `topic` — the topic touched, empty if not applicable.
 - `articles_changed` — integer count (written + updated).
 - `images_copied` — integer count.
@@ -289,7 +289,7 @@ timestamp	verb	source	bucket	topic	articles_changed	images_copied	status	notes
   | `eval_summary` | `episode_captured` | `reflect_summary`.
 - `notes` — short freeform. For `refine_summary` rows, **must
   include** `drift=<N>` where N is the total drift count
-  (orphans + index-mismatches + broken-embeds + cross-bucket-links
+  (orphans + index-mismatches + broken-embeds + cross-bundle-links
   + schema-violations + episode-integrity). For `eval_summary` rows,
   **must include** `total_files_read=<N>` and
   `quality=<good>/<partial>/<poor>/<missing>` counts
@@ -343,19 +343,19 @@ timestamp	question_id	files_read	answer_quality	notes
 A single integer. Sum of:
 
 - **Orphans** — articles with zero inbound `[[wiki links]]` from
-  other articles in their bucket (excluding the topic's own
+  other articles in their bundle (excluding the topic's own
   `index.md` listing).
-- **Index mismatches** — entries in any `index.md` router (bucket or
+- **Index mismatches** — entries in any `index.md` router (bundle or
   topic) that don't resolve to a real file, or files on disk not
   listed in the relevant index.
 - **Broken embeds** — `![[image.ext]]` references that don't resolve
   in the same topic folder.
-- **Cross-bucket links** — any `[[wiki link]]` that crosses bucket
+- **Cross-bundle links** — any `[[wiki link]]` that crosses bundle
   boundaries (hard-rule-2 violation; counts as a single drift unit per
   occurrence). **Relative-path markdown links and the frontmatter
   `related:` array are exempt** — they are the intended portable OKF
-  graph channel and may cross buckets freely. Only `[[ ]]` edges are
-  walled; the query walk follows only `[[ ]]`, so its same-bucket
+  graph channel and may cross bundles freely. Only `[[ ]]` edges are
+  walled; the query walk follows only `[[ ]]`, so its same-bundle
   safety is preserved.
 - **Schema violations** — articles missing required sections
   (`Source:`, `Summary`, etc.), factual claims without
@@ -365,7 +365,7 @@ A single integer. Sum of:
 - **Episode integrity** — episodes in `Intelligence/_episodes/`
   missing required frontmatter or sections (see *Episodic memory
   contracts*), or any `[[wiki link]]` inside an episode that points
-  **outside** `_episodes/` (episodes reference bucket articles by
+  **outside** `_episodes/` (episodes reference bundle articles by
   `(source: ...)` citation only — a `[[ ]]` edge leaving the zone is
   a violation, counted once per occurrence). Episode→article
   citations are **not** counted (they are not link-graph edges).
@@ -384,9 +384,9 @@ decide what to do with a regression report.
 
 `Intelligence/_episodes/` is the **episodic** memory zone — the
 agent's record of *experiences* (goal → actions → outcome → insight),
-distinct from the semantic facts held in the buckets. It is a
-governance zone like `_eval/` and `_unsorted/`: **not** a bucket, so
-the `query` bucket-walk ignores it, and the orchestrator is its sole
+distinct from the semantic facts held in the bundles. It is a
+governance zone like `_eval/` and `_unsorted/`: **not** a bundle, so
+the `query` bundle-walk ignores it, and the orchestrator is its sole
 writer (hard rule 8). These schemas are frozen — copy them verbatim.
 
 ### Zone layout
@@ -422,7 +422,7 @@ timestamp: 2026-06-02T10:05:00Z
 situation: <one line — the context/inputs>
 intent: <one line — the goal of this episode>
 outcome: success | partial | failure
-tags: [bucket-or-topic, source-type, …]          # the recall index
+tags: [bundle-or-topic, source-type, …]          # the recall index
 distilled: false                                  # reflect sets true once folded into reflections.md
 ---
 
@@ -432,7 +432,7 @@ life: the day in one paragraph. signal: what was captured and why.
 
 ## Actions
 What was done, in order. operational: per-source routing decisions
-(bucket→topic, why), articles read/written, quarantine calls.
+(bundle→topic, why), articles read/written, quarantine calls.
 life/signal: the decision/preference recorded (often N/A).
 
 ## Outcome
@@ -446,7 +446,7 @@ what `reflect` later distills.
 
 ## Links
 `[[related-episode]]` **within `_episodes/` only**, and
-`(source: <path>)` citations to origin sources and related bucket
+`(source: <path>)` citations to origin sources and related bundle
 articles.
 ```
 
@@ -499,9 +499,9 @@ appends unboundedly.
 - **`distilled: true` episodes are excluded from the default exemplar
   walk** — their insight already lives in `reflections.md`. They stay
   on disk for audit but leave the hot recall surface.
-- **Linking rule (preserves hard rule 2).** Episodes reference bucket
-  articles by `(source: <bucket>/<topic>/<article>.md)` **citation
+- **Linking rule (preserves hard rule 2).** Episodes reference bundle
+  articles by `(source: <bundle>/<topic>/<article>.md)` **citation
   only** — never `[[wiki links]]`. `[[ ]]` links inside episodes are
   **within `_episodes/` only** (episode↔episode). Episodes emit no
-  `[[ ]]` edge into a bucket, so the same-bucket-only link firewall is
-  untouched. Bucket articles never link back to episodes (one-way).
+  `[[ ]]` edge into a bundle, so the same-bundle-only link firewall is
+  untouched. Bundle articles never link back to episodes (one-way).

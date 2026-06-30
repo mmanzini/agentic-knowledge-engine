@@ -1,7 +1,7 @@
 # _search — tier-2 hybrid recall zone
 
-Governance zone (like `_eval/` and `_unsorted/`), **not a bucket**: the
-`query` bucket-walk ignores it and no articles live here. It holds the
+Governance zone (like `_eval/` and `_unsorted/`), **not a bundle**: the
+`query` bundle-walk ignores it and no articles live here. It holds the
 local hybrid search index and its tooling — `build_index.py` (indexer),
 `search.py` (query CLI), and the gitignored `index.db` build artifact.
 The agent uses it only at **tier 2** of the query verb: when the tier-1

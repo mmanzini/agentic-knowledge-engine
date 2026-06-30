@@ -2,7 +2,7 @@
 type: reference
 title: Another article — the cost of premature abstraction
 description: A bad abstraction is paid for every time a reader has to unwind it, while three duplicated lines are paid for once when someone unifies them.
-bucket: domain-a
+bundle: domain-a
 topic: topic-two
 tags: []
 source: https://example.com/premature-abstraction

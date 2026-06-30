@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the tier-2 hybrid search index over Intelligence/ articles.
 
-Walks Intelligence/<bucket>/<topic>/*.md, chunks article bodies per
+Walks Intelligence/<bundle>/<topic>/*.md, chunks article bodies per
 section, and writes a SQLite database (index.db, gitignored) with:
 
   - an FTS5 table for keyword search (ships with the system sqlite3)
@@ -35,16 +35,16 @@ EMBED_MODEL = "all-MiniLM-L6-v2"
 
 
 def iter_articles():
-    """Yield (bucket, topic, path) for every article file."""
-    for bucket_dir in sorted(INTEL_DIR.iterdir()):
-        if not bucket_dir.is_dir() or bucket_dir.name in SKIP_DIRS:
+    """Yield (bundle, topic, path) for every article file."""
+    for bundle_dir in sorted(INTEL_DIR.iterdir()):
+        if not bundle_dir.is_dir() or bundle_dir.name in SKIP_DIRS:
             continue
-        for path in sorted(bucket_dir.rglob("*.md")):
+        for path in sorted(bundle_dir.rglob("*.md")):
             if path.name in SKIP_FILES:
                 continue
             rel = path.relative_to(INTEL_DIR)
             topic = rel.parts[1] if len(rel.parts) > 2 else ""
-            yield bucket_dir.name, topic, path
+            yield bundle_dir.name, topic, path
 
 
 def parse_frontmatter(text):
@@ -133,7 +133,7 @@ def ensure_schema(db):
         """
         CREATE TABLE IF NOT EXISTS files (
             path TEXT PRIMARY KEY,        -- relative to Intelligence/
-            bucket TEXT NOT NULL,
+            bundle TEXT NOT NULL,
             topic TEXT NOT NULL,
             content_hash TEXT NOT NULL,
             embedded INTEGER NOT NULL DEFAULT 0,
@@ -173,9 +173,9 @@ def main():
 
     known = {row[0]: (row[1], row[2]) for row in db.execute("SELECT path, content_hash, embedded FROM files")}
     seen, added, skipped = set(), 0, 0
-    pending = []  # (rel_path, bucket, topic, content_hash, facets, chunks)
+    pending = []  # (rel_path, bundle, topic, content_hash, facets, chunks)
 
-    for bucket, topic, path in iter_articles():
+    for bundle, topic, path in iter_articles():
         rel = str(path.relative_to(INTEL_DIR))
         seen.add(rel)
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -190,7 +190,7 @@ def main():
         fc = facet_chunk(facets)
         if fc:
             chunks = [fc] + chunks
-        pending.append((rel, bucket, topic, content_hash, facets, chunks))
+        pending.append((rel, bundle, topic, content_hash, facets, chunks))
 
     # Remove rows for deleted files so search never routes to a gone article.
     removed = set(known) - seen
@@ -200,7 +200,7 @@ def main():
             "SELECT 'delete', id, text FROM chunks WHERE path = ?", (rel,))
         db.execute("DELETE FROM files WHERE path = ?", (rel,))
 
-    for rel, bucket, topic, content_hash, facets, chunks in pending:
+    for rel, bundle, topic, content_hash, facets, chunks in pending:
         db.execute(
             "INSERT INTO chunks_fts(chunks_fts, rowid, text) "
             "SELECT 'delete', id, text FROM chunks WHERE path = ?", (rel,))
@@ -211,9 +211,9 @@ def main():
             embs = embedder.encode(chunks, normalize_embeddings=True)
             vectors = [np.asarray(v, dtype="float32").tobytes() for v in embs]
         db.execute(
-            "INSERT INTO files (path, bucket, topic, content_hash, embedded, type, tags, title, description) "
+            "INSERT INTO files (path, bundle, topic, content_hash, embedded, type, tags, title, description) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (rel, bucket, topic, content_hash, 1 if embedder is not None else 0,
+            (rel, bundle, topic, content_hash, 1 if embedder is not None else 0,
              facets.get("type", ""), facets.get("tags", ""),
              facets.get("title", ""), facets.get("description", "")))
         for seq, (chunk, vec) in enumerate(zip(chunks, vectors)):

@@ -4,7 +4,7 @@ kind: operational
 verb: consolidate
 timestamp: 2026-01-01T00:00:00Z
 situation: One web clipping about small-team velocity arrived in Resources/web-clippings/.
-intent: Route the clipping to the right bucket/topic and write a cited article.
+intent: Route the clipping to the right bundle/topic and write a cited article.
 outcome: success
 tags: [domain-a, web-clipping, new-topic]
 distilled: false
@@ -18,11 +18,11 @@ exactly. (This is a **placeholder** episode demonstrating the schema.)
 
 ## Actions
 
-- Compared the clipping against each bucket's `_master-index.md` Scope
+- Compared the clipping against each bundle's `_master-index.md` Scope
   paragraph → routed to `domain-a`.
 - No topic fit → created topic `topic-one` with its `_index.md`.
 - Wrote the article with inline `(source: clipping-one.md)` citations.
-- Updated `topic-one/_index.md` and the bucket `_master-index.md`.
+- Updated `topic-one/_index.md` and the bundle `_master-index.md`.
 
 ## Outcome
 

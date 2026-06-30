@@ -9,4 +9,4 @@ abstractions and the trade-off between duplication and DRY.
 
 ## Related Topics
 
-- [[../topic-one/index|Topic One]] — companion topic in the same bucket; provides the coordination-overhead framing.
+- [[../topic-one/index|Topic One]] — companion topic in the same bundle; provides the coordination-overhead framing.

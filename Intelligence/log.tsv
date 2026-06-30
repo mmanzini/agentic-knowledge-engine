@@ -1,6 +1,6 @@
-timestamp	verb	source	bucket	topic	articles_changed	images_copied	status	notes
+timestamp	verb	source	bundle	topic	articles_changed	images_copied	status	notes
 2026-04-26T12:00:00Z	consolidate	(seed)	domain-a	topic-one	1	1	kept	seed example: clipping consolidated
-2026-04-26T12:00:01Z	consolidate	(seed)	_unsorted		1	0	quarantined	seed example: no bucket fit
+2026-04-26T12:00:01Z	consolidate	(seed)	_unsorted		1	0	quarantined	seed example: no bundle fit
 2026-04-26T12:00:02Z	consolidate	(seed)			0	0	crashed	seed example: write error; left in place
-2026-04-26T12:00:03Z	refine	(refine)	(all)		0	0	refine_summary	drift=0 orphans=0 index_mismatches=0 broken_embeds=0 cross_bucket=0 schema_violations=0
+2026-04-26T12:00:03Z	refine	(refine)	(all)		0	0	refine_summary	drift=0 orphans=0 index_mismatches=0 broken_embeds=0 cross_bundle=0 schema_violations=0
 2026-04-26T12:00:04Z	evaluate	(evaluate)	(all)		0	0	eval_summary	total_files_read=0 quality=0g/0p/0poor/0m baseline_not_yet_run

@@ -7,9 +7,9 @@ representative question set, "did the wiki improve?" is unmeasurable
 and the autoresearch discipline collapses into a vibe.
 
 **Replace these placeholders with your real questions.** The seeded
-five target the placeholder buckets and span the access patterns the
-wiki must support: single-topic retrieval, within-bucket cross-topic
-retrieval, and cross-bucket distinction. Their value is illustrative
+five target the placeholder bundles and span the access patterns the
+wiki must support: single-topic retrieval, within-bundle cross-topic
+retrieval, and cross-bundle distinction. Their value is illustrative
 — rewrite them once you know what you actually want this vault to
 answer.
 
@@ -34,30 +34,30 @@ neighbours.
 **Prompt:** When is duplication preferable to abstraction, and why?
 
 **Target topic:** `domain-a/topic-two`. Tests routing within a
-bucket: the answer should come from `topic-two`, not `topic-one`.
+bundle: the answer should come from `topic-two`, not `topic-one`.
 
 **Expected file_read budget:** 1 article body.
 
-### q3 — within-bucket cross-topic retrieval
+### q3 — within-bundle cross-topic retrieval
 
 **Prompt:** Is team size the cause of coordination cost, or merely
 a proxy?
 
 **Target topics:** `domain-a/topic-one` ↔ `domain-a/topic-two`.
 Tests that the agent follows `[[wiki links]]` across topics inside
-a bucket when the answer requires synthesising both. The article in
+a bundle when the answer requires synthesising both. The article in
 `topic-one` notes the contradiction with `topic-two`'s framing
 explicitly — a `good` answer should reference both.
 
 **Expected file_read budget:** 2 article bodies.
 
-### q4 — different-bucket detail recall
+### q4 — different-bundle detail recall
 
 **Prompt:** What blocks platform teams from automating credential
 rotation?
 
 **Target topic:** `domain-b/topic-three`. Tests that the agent
-correctly routes to the second bucket and doesn't mis-route to
+correctly routes to the second bundle and doesn't mis-route to
 Domain A's operational-sounding articles.
 
 **Expected file_read budget:** 1 article body.
@@ -80,13 +80,13 @@ interview.
 ### q6 — generative task with mandatory personal-context auto-pull (TEMPLATE)
 
 **Prompt:** *Replace this with your own generative-task question
-that should force the agent to walk a personal-context bucket
-(e.g., a bucket sourced from `Resources/personal/about-me.md` and
+that should force the agent to walk a personal-context bundle
+(e.g., a bundle sourced from `Resources/personal/about-me.md` and
 `writing-rules.md`) BEFORE generating.* Example:
 "Draft a short LinkedIn post (≤120 words) introducing this project
 in my voice — what it is, why it exists, what makes it different."
 
-**Target topics:** the personal-context bucket (e.g.,
+**Target topics:** the personal-context bundle (e.g.,
 `personal/_master-index` and articles inside it). A `good` answer
 reads those articles **before** generating, and the resulting output
 matches the user's stated voice (no marketing fluff, no AI-writing
@@ -104,17 +104,17 @@ is a regression even if the output sounds plausible.
 regardless of content quality.
 
 **Expected file_read budget:** 2–3 article bodies (all from the
-personal-context bucket).
+personal-context bundle).
 
 ### q7 — boundary case: pure technical query, no personal walk expected (TEMPLATE)
 
 **Prompt:** *Replace this with your own pure-technical/reference
 question that should NOT trigger a personal-context walk.* Example:
 "Explain how the `consolidate` verb handles a source file that
-matches two buckets at once."
+matches two bundles at once."
 
 **Target topic:** any technical/reference topic in your wiki — not
-the personal-context bucket.
+the personal-context bundle.
 
 **What this tests:** the **negative side** of the personal-context
 auto-pull rule. This is a pure technical/reference question. The
@@ -136,7 +136,7 @@ memory — a past decision or a stated preference, not a semantic fact.*
 Example: "What tone preference did I state for drafting, and when?"
 
 **Target:** `Intelligence/_episodes/signals/` (and/or `life/`). Tests
-the **recall** path (not the bucket walk): the agent reads
+the **recall** path (not the bundle walk): the agent reads
 `_episodes/_index.md` → the kind `_index.md` one-liners → pulls ≤`k`
 (=3) episode bodies, skipping `distilled: true` ones.
 
@@ -154,7 +154,7 @@ cost). `recall_reads > 3` is a budget regression.
 
 **Prompt:** *Replace this with a question about real wiki content,
 worded so it shares NO key terms with the relevant index one-liners.*
-Example for the placeholder buckets: "Why do big groups slow down
+Example for the placeholder bundles: "Why do big groups slow down
 delivery?" (target article says "coordination overhead in software
 teams" — zero word overlap).
 
@@ -179,7 +179,7 @@ itself costs 0).
 
 ### q10 — fuzzy phrasing, second target (TEMPLATE)
 
-**Prompt:** *Same shape as q9, different bucket — keeps tier-2
+**Prompt:** *Same shape as q9, different bundle — keeps tier-2
 coverage honest across the taxonomy.* Example: "What stops old
 access keys from getting cleaned up?" (target article frames it as
 "credential rotation" and "political blockers").

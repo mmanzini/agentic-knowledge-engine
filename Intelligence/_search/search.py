@@ -90,13 +90,13 @@ def main():
     seen_articles = set()
     for cid in merged:
         row = db.execute(
-            "SELECT c.text, c.path, f.bucket, f.topic FROM chunks c "
+            "SELECT c.text, c.path, f.bundle, f.topic FROM chunks c "
             "JOIN files f ON f.path = c.path WHERE c.id = ?", (cid,)).fetchone()
         if row is None:
             continue
-        text, path, bucket, topic = row
+        text, path, bundle, topic = row
         snippet = " ".join(text.split())[:200]
-        results.append({"article": path, "bucket": bucket, "topic": topic,
+        results.append({"article": path, "bundle": bundle, "topic": topic,
                         "snippet": snippet})
         seen_articles.add(path)
 

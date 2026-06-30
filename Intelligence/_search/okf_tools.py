@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """In-place OKF tooling for the live wiki — no export snapshot.
 
-Each bucket directory *is* its own OKF bundle: `index.md` routers, articles
+Each bundle directory is OKF-conformant in place: `index.md` routers, articles
 with `type` frontmatter + a `related:` graph, and a derived `log.md`. This
 script maintains the two derived/checked pieces:
 
   --check            conformance pass (every article has `type`; related:/
                      relative links resolve). Prints `okf=conformant` or
                      `okf=<N>-violations`. Used by the `refine` verb.
-  --log [bucket ...] (re)write `Intelligence/<bucket>/log.md` from log.tsv
-                     for the named buckets (default: all). Run by the
-                     consolidate auto-chain for touched buckets.
+  --log [bundle ...] (re)write `Intelligence/<bundle>/log.md` from log.tsv
+                     for the named bundles (default: all). Run by the
+                     consolidate auto-chain for touched bundles.
 
 No third-party deps. Governance zones (`_episodes/ _eval/ _search/
-_unsorted/`) are never buckets and are skipped.
+_unsorted/`) are never bundles and are skipped.
 """
 
 import argparse
@@ -29,19 +29,19 @@ SKIP_DIRS = {"_episodes", "_eval", "_unsorted", "_search", "_export"}
 INDEX_FILES = {"index.md", "_index.md", "_master-index.md", "log.md"}
 
 
-def iter_articles(only_bucket=None):
-    """Yield (bucket, topic, path) for every article (non-router) file."""
-    for bucket_dir in sorted(INTEL_DIR.iterdir()):
-        if not bucket_dir.is_dir() or bucket_dir.name in SKIP_DIRS:
+def iter_articles(only_bundle=None):
+    """Yield (bundle, topic, path) for every article (non-router) file."""
+    for bundle_dir in sorted(INTEL_DIR.iterdir()):
+        if not bundle_dir.is_dir() or bundle_dir.name in SKIP_DIRS:
             continue
-        if only_bucket and bucket_dir.name != only_bucket:
+        if only_bundle and bundle_dir.name != only_bundle:
             continue
-        for path in sorted(bucket_dir.rglob("*.md")):
+        for path in sorted(bundle_dir.rglob("*.md")):
             if path.name in INDEX_FILES:
                 continue
             rel = path.relative_to(INTEL_DIR)
             topic = rel.parts[1] if len(rel.parts) > 2 else ""
-            yield bucket_dir.name, topic, path
+            yield bundle_dir.name, topic, path
 
 
 def split_frontmatter(text):
@@ -75,11 +75,11 @@ def split_frontmatter(text):
 
 # ---------------------------------------------------------------- conformance
 
-def check_conformance(only_buckets=None):
+def check_conformance(only_bundles=None):
     """Return (violations:int, lines:list[str]) without writing anything."""
     missing_type, unresolved = [], []
-    for bucket, _topic, path in iter_articles():
-        if only_buckets and bucket not in only_buckets:
+    for bundle, _topic, path in iter_articles():
+        if only_bundles and bundle not in only_bundles:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         fm, body = split_frontmatter(text)
@@ -114,14 +114,14 @@ def check_conformance(only_buckets=None):
 
 # ------------------------------------------------------------------- log.md
 
-def derive_log_md(bucket):
-    """Render a per-bucket OKF `log.md` from the central log.tsv rows."""
+def derive_log_md(bundle):
+    """Render a per-bundle OKF `log.md` from the central log.tsv rows."""
     if not LOG_TSV.exists():
         return None
     by_date = {}
     for line in LOG_TSV.read_text(encoding="utf-8").splitlines()[1:]:
         cols = line.split("\t")
-        if len(cols) < 9 or cols[3] != bucket:
+        if len(cols) < 9 or cols[3] != bundle:
             continue
         ts, verb, topic = cols[0], cols[1], cols[4]
         changed, status = cols[5], cols[7]
@@ -133,7 +133,7 @@ def derive_log_md(bucket):
         by_date.setdefault(ts[:10], []).append(f"- {verb} {loc}— {detail}")
     if not by_date:
         return None
-    out = [f"# Change log — {bucket}", ""]
+    out = [f"# Change log — {bundle}", ""]
     for date in sorted(by_date, reverse=True):
         out.append(f"## {date}")
         out.extend(by_date[date])
@@ -141,9 +141,9 @@ def derive_log_md(bucket):
     return "\n".join(out).rstrip() + "\n"
 
 
-def write_logs(buckets):
+def write_logs(bundles):
     written = []
-    for b in buckets:
+    for b in bundles:
         md = derive_log_md(b)
         if md:
             (INTEL_DIR / b / "log.md").write_text(md, encoding="utf-8")
@@ -151,7 +151,7 @@ def write_logs(buckets):
     return written
 
 
-def all_buckets():
+def all_bundles():
     return [d.name for d in sorted(INTEL_DIR.iterdir())
             if d.is_dir() and d.name not in SKIP_DIRS]
 
@@ -160,8 +160,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--check", action="store_true", help="conformance pass, no write")
-    g.add_argument("--log", nargs="*", metavar="BUCKET",
-                   help="(re)write per-bucket log.md (default: all buckets)")
+    g.add_argument("--log", nargs="*", metavar="BUNDLE",
+                   help="(re)write per-bundle log.md (default: all bundles)")
     args = ap.parse_args()
 
     if args.check:
@@ -171,9 +171,9 @@ def main():
             print(ln)
         return 0
 
-    buckets = args.log or all_buckets()
-    written = write_logs(buckets)
-    print(f"[okf] log.md written for {len(written)} bucket(s): {', '.join(written)}")
+    bundles = args.log or all_bundles()
+    written = write_logs(bundles)
+    print(f"[okf] log.md written for {len(written)} bundle(s): {', '.join(written)}")
     return 0
 
 

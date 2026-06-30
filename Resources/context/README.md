@@ -11,9 +11,9 @@ shift, a preference, a stated opinion, a reaction, a writing-style
 or tone-of-voice observation, a non-trivial new fact about a project,
 person, tool, or topic.
 
-The bucket destination is decided at consolidate time by the normal
+The bundle destination is decided at consolidate time by the normal
 routing heuristic — captures can land in `personal`, or any other
-bucket as appropriate. Multi-bucket placement is allowed when content
+bundle as appropriate. Multi-bundle placement is allowed when content
 fits more than one scope.
 
 The lifecycle here is `delete_after_consolidation: true`: files are
