@@ -5,14 +5,17 @@ Each bundle directory is OKF-conformant in place: `index.md` routers, articles
 with `type` frontmatter + a `related:` graph, and a derived `log.md`. This
 script maintains the two derived/checked pieces:
 
-  --check            conformance pass (every article has `type`; related:/
-                     relative links resolve). Prints `okf=conformant` or
+  --check            conformance pass (strict-YAML frontmatter parses; every
+                     article has `type`; related:/relative links resolve; no
+                     legacy v0.1 `timestamp:`/`source:` fields; generated/
+                     verified shapes valid). Prints `okf=conformant` or
                      `okf=<N>-violations`. Used by the `refine` verb.
   --log [bundle ...] (re)write `Intelligence/<bundle>/log.md` from log.tsv
                      for the named bundles (default: all). Run by the
                      consolidate auto-chain for touched bundles.
 
-No third-party deps. Governance zones (`_episodes/ _eval/ _search/
+Requires PyYAML (strict frontmatter parsing per OKF v0.2 — invalid YAML is a
+conformance violation). Governance zones (`_episodes/ _eval/ _search/
 _unsorted/`) are never bundles and are skipped.
 """
 
@@ -20,6 +23,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 SEARCH_DIR = Path(__file__).resolve().parent
 INTEL_DIR = SEARCH_DIR.parent
@@ -45,50 +50,66 @@ def iter_articles(only_bundle=None):
 
 
 def split_frontmatter(text):
-    """Return (frontmatter_dict_or_None, body). Minimal YAML-ish reader."""
+    """Return (frontmatter_dict_or_None, body, error_or_None).
+
+    Strict: the block between the `---` fences must be valid YAML mapping
+    (PyYAML safe_load). error is None (ok), "missing" (no frontmatter
+    fences), or "invalid: <reason>" (unparseable / non-mapping).
+    """
     if not text.startswith("---\n"):
-        return None, text
+        return None, text, "missing"
     end = text.find("\n---", 4)
     if end == -1:
-        return None, text
+        return None, text, "missing"
     block, body = text[4:end], text[end + 4:].lstrip("\n")
-    fm, key = {}, None
-    for line in block.splitlines():
-        if not line.strip():
-            continue
-        m = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", line)
-        if m:
-            key, val = m.group(1), m.group(2).strip()
-            if val == "":
-                fm[key] = []
-            elif val.startswith("[") and val.endswith("]"):
-                inner = val[1:-1].strip()
-                fm[key] = [x.strip() for x in inner.split(",")] if inner else []
-            else:
-                fm[key] = val
-        elif line.lstrip().startswith("- ") and key is not None:
-            fm.setdefault(key, [])
-            if isinstance(fm[key], list):
-                fm[key].append(line.lstrip()[2:].strip())
-    return fm, body
+    try:
+        fm = yaml.safe_load(block)
+    except yaml.YAMLError as e:
+        reason = str(e).splitlines()[0] if str(e) else e.__class__.__name__
+        return None, body, f"invalid: {reason}"
+    if not isinstance(fm, dict):
+        return None, body, "invalid: frontmatter is not a YAML mapping"
+    return fm, body, None
 
 
 # ---------------------------------------------------------------- conformance
 
+def _bad_actor_event(ev):
+    """True when a generated/verified event lacks a non-empty `by`."""
+    return not (isinstance(ev, dict) and ev.get("by"))
+
+
 def check_conformance(only_bundles=None):
     """Return (violations:int, lines:list[str]) without writing anything."""
     missing_type, unresolved = [], []
+    invalid_yaml, legacy_v01, bad_shape = [], [], []
     for bundle, _topic, path in iter_articles():
         if only_bundles and bundle not in only_bundles:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        fm, body = split_frontmatter(text)
+        fm, body, err = split_frontmatter(text)
         rel = str(path.relative_to(INTEL_DIR))
+        if err and err.startswith("invalid"):
+            invalid_yaml.append(f"{rel} ({err})")
         if fm is None or not fm.get("type"):
             missing_type.append(rel)
             fm = fm or {}
-        for tgt in fm.get("related", []) if isinstance(fm.get("related"), list) else []:
-            if not (INTEL_DIR / tgt).exists():
+        # v0.1 leftovers: `timestamp:` scalar / `source:` scalar were replaced
+        # by generated:{by,at} and sources:[] in the v0.2 migration.
+        if "timestamp" in fm or "source" in fm:
+            legacy_v01.append(rel)
+        # v0.2 trust-field shapes: generated needs `by`; verified is an event
+        # mapping or a list of event mappings, each needing `by`.
+        if "generated" in fm and _bad_actor_event(fm["generated"]):
+            bad_shape.append(f"{rel} → generated")
+        if "verified" in fm:
+            v = fm["verified"]
+            events = v if isinstance(v, list) else [v]
+            if any(_bad_actor_event(ev) for ev in events):
+                bad_shape.append(f"{rel} → verified")
+        rel_list = fm.get("related")
+        for tgt in rel_list if isinstance(rel_list, list) else []:
+            if not (INTEL_DIR / str(tgt)).exists():
                 unresolved.append(f"{rel} → related:{tgt}")
         # inline relative .md links *inside the wiki* must resolve; links
         # pointing outside Intelligence/ (e.g. ../../Resources source citations)
@@ -101,14 +122,17 @@ def check_conformance(only_bundles=None):
                 continue
             if not tgt.exists():
                 unresolved.append(f"{rel} → {m}")
-    n = len(missing_type) + len(unresolved)
+    n = (len(missing_type) + len(unresolved) + len(invalid_yaml)
+         + len(legacy_v01) + len(bad_shape))
     lines = []
-    if missing_type:
-        lines.append(f"  missing type ({len(missing_type)}): "
-                     + ", ".join(missing_type[:5]) + (" …" if len(missing_type) > 5 else ""))
-    if unresolved:
-        lines.append(f"  unresolved links ({len(unresolved)}): "
-                     + ", ".join(unresolved[:5]) + (" …" if len(unresolved) > 5 else ""))
+    for label, items in (("missing type", missing_type),
+                         ("unresolved links", unresolved),
+                         ("invalid yaml", invalid_yaml),
+                         ("legacy v0.1 fields", legacy_v01),
+                         ("bad trust-field shape", bad_shape)):
+        if items:
+            lines.append(f"  {label} ({len(items)}): "
+                         + ", ".join(items[:5]) + (" …" if len(items) > 5 else ""))
     return n, lines
 
 

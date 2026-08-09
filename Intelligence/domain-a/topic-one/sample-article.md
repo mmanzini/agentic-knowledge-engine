@@ -5,10 +5,17 @@ description: Smaller teams ship faster than larger ones because the number of co
 bundle: domain-a
 topic: topic-one
 tags: []
-source: https://example.com/small-teams-ship-faster
 resource: https://example.com/small-teams-ship-faster
-timestamp: 2026-05-28T11:25:51Z
-status: active
+sources:
+  - id: small-teams-ship-faster
+    resource: https://example.com/small-teams-ship-faster
+generated:
+  by: example-agent/model-v1
+  at: '2026-05-28T11:25:51Z'
+verified:
+  - by: human:example-maintainer
+    at: '2026-05-29T09:00:00Z'
+status: stable
 related:
   - domain-a/topic-two/another-article.md
 ---

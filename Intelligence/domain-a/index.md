@@ -1,3 +1,7 @@
+---
+okf_version: "0.2"
+---
+
 # Domain A
 
 **Scope**: Placeholder bundle A. Stand-in for one of the user's macro

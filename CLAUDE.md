@@ -191,13 +191,21 @@ Then proceed.
    `index.md` and add it to the bundle's `index.md`.
 4. Write or update the article using the *Article schema* from
    `schema.md`. Copy any referenced images into the topic folder.
-   **Frontmatter (OKF):** open every written/updated article with the
-   YAML frontmatter block — `type` (default from the bundle per the
+   **Frontmatter (OKF v0.2):** open every written/updated article with
+   the YAML frontmatter block — `type` (default from the bundle per the
    *Article type vocabulary*, override when a more specific type fits),
-   `title`, `description`, `bundle`, `topic`, `tags`, `source`,
-   `resource` (live URL when the origin has one), `timestamp` (this
-   run, ISO 8601 UTC), `status`, and the `related:` array. Body shape
-   and inline `(source: …)` citations are unchanged.
+   `title`, `description`, `bundle`, `topic`, `tags`, `resource` (live
+   URL when the origin has one), `sources:` (provenance list — one
+   entry per origin with `id` + `resource`; omit when self-authored),
+   `generated: {by: <agent-actor>, at: <this run, ISO 8601 UTC>}`,
+   `status` (`stable` default; `draft` for thin or unverified content;
+   `deprecated`), and the `related:` array. Never write the legacy
+   v0.1 `timestamp:`/`source:` fields. `verified:` is written **only**
+   on an explicit human confirmation event (actor `human:<id>`), never
+   speculatively. Emit YAML-safe scalars — quote anything containing
+   `:` or other ambiguous syntax; frontmatter must survive a strict
+   YAML parse. Body shape and inline `(source: …)` citations are
+   unchanged.
    **Dual links:** in `## Related`, write each link as
    `[[slug]] · [title](../<topic>/<article>.md)` (Obsidian wikilink +
    portable relative path), and mirror every relation into the
@@ -282,8 +290,10 @@ Also report (do not count toward drift; track separately in `notes`):
   `python3 Intelligence/_search/okf_tools.py --check` (whole-wiki, no
   write) and note `okf=conformant` or `okf=<N>-violations` with a short
   breakdown (articles missing `type`, unresolved `related:`/relative
-  links). Report only — the missing-`type` case already counts once
-  under schema-violations drift; this line is the OKF-specific rollup.
+  links, invalid strict-YAML frontmatter, leftover legacy v0.1
+  `timestamp:`/`source:` fields, malformed `generated`/`verified`
+  shapes). Report only — these cases already count once under
+  schema-violations drift; this line is the OKF-specific rollup.
 - **Search-index staleness** — if `Intelligence/_search/index.db` is
   missing or older than the newest article file, note
   `search_index=stale` (report only — not part of the frozen drift

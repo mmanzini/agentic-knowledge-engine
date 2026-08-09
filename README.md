@@ -305,10 +305,17 @@ description: one sentence — what this is and its core thesis
 bundle: bundle-slug
 topic: topic-slug
 tags: [tag, tag]
-source: Resources/path/to/source.md   # or self-authored
-resource:                    # live URL of the origin, when one exists
-timestamp: 2026-01-01T00:00:00Z
-status: active               # active | needs-verification | deprecated
+resource: https://example.com/origin  # live URL of the origin, when one exists
+sources:                     # provenance list (OKF v0.2); omit when self-authored
+  - id: source-slug
+    resource: Resources/path/to/source.md
+generated:                   # who/when last wrote this content (OKF v0.2)
+  by: your-agent/model-v1    # actor: <producer>/<version> | human:<id> | process:<id>
+  at: '2026-01-01T00:00:00Z'
+verified:                    # optional; only on an explicit confirmation event
+  - by: human:maintainer
+    at: '2026-01-02T00:00:00Z'
+status: stable               # draft | stable | deprecated (absent = stable)
 related:
   - bundle/topic/other-article.md     # repo-relative; MAY cross bundles (OKF graph)
 ---
@@ -339,7 +346,7 @@ Embed images with `![[image.png]]` — the file must live in the same topic fold
 - [[other-article-in-this-bundle]] · [other-article](../topic/other-article.md) — one-line note
 ```
 
-`type` is the only required field (OKF prescribes no taxonomy — define your own type vocabulary). The `**Source:**` line and inline `(source: …)` citations stay. **Dual links:** `## Related` keeps the Obsidian `[[wiki link]]` *and* a relative-path link beside it, and mirrors every edge into the `related:` array — so Obsidian and a non-Obsidian OKF consumer both traverse. See *Open Knowledge Format* below.
+`type` is the only required field (OKF prescribes no taxonomy — define your own type vocabulary). The `**Source:**` line and inline `(source: …)` citations stay. **Trust tiers (OKF v0.2):** consumers derive trust from `verified` — no `verified` key = *unverified*, non-`human:` verifiers = *machine-confirmed*, any `human:` verifier = *human-reviewed*; write `verified` only on an explicit confirmation event. Frontmatter must survive a strict YAML parse — quote scalars containing `:` or other ambiguous syntax. **Dual links:** `## Related` keeps the Obsidian `[[wiki link]]` *and* a relative-path link beside it, and mirrors every edge into the `related:` array — so Obsidian and a non-Obsidian OKF consumer both traverse. See *Open Knowledge Format* below.
 
 ### Citation rules
 
@@ -395,7 +402,7 @@ The orchestrator compares the current drift count to the previous `refine_summar
 
 ## Open Knowledge Format (OKF)
 
-The wiki is [OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)-native: a directory of markdown files, one concept per file, each carrying YAML frontmatter (`type` required, the rest optional) and cross-linked into a graph. That is exactly the shape this engine already had — so OKF here is a thin conformance + portability layer, not a different model.
+The wiki is [OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/)-native — conformant with [spec v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md): a directory of markdown files, one concept per file, each carrying YAML frontmatter (`type` required, the rest optional) and cross-linked into a graph. That is exactly the shape this engine already had — so OKF here is a thin conformance + portability layer, not a different model. v0.2 adds queryable trust and provenance (`sources`, `generated`, `verified`, `status`, `stale_after`) — this engine writes `sources`/`generated`/`status` on every article and `verified` on explicit human confirmation; each bundle-root `index.md` declares `okf_version: "0.2"`.
 
 **The live bundle is the OKF surface — no export step.** Each `Intelligence/<bundle>/` directory is *itself* a conformant OKF bundle: `index.md` routers, articles with `type` frontmatter, a `related:` cross-bundle graph, and a derived `log.md`. Point a bundle at a git mirror (this engine syncs bundles out via Unison) and the mirror *is* a clean OKF bundle, refreshed by the normal sync with nothing to export.
 

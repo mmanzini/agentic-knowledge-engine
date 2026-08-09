@@ -5,10 +5,14 @@ description: A bad abstraction is paid for every time a reader has to unwind it,
 bundle: domain-a
 topic: topic-two
 tags: []
-source: https://example.com/premature-abstraction
 resource: https://example.com/premature-abstraction
-timestamp: 2026-05-28T11:25:51Z
-status: active
+sources:
+  - id: premature-abstraction
+    resource: https://example.com/premature-abstraction
+generated:
+  by: example-agent/model-v1
+  at: '2026-05-28T11:25:51Z'
+status: stable
 related:
   - domain-a/topic-one/sample-article.md
 ---

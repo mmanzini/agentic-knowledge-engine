@@ -99,6 +99,10 @@ The two flags are independent:
 ### `Intelligence/<bundle>/index.md` (bundle router)
 
 ```markdown
+---
+okf_version: "0.2"
+---
+
 # <Bundle name>
 
 **Scope**: One paragraph describing what belongs in this bundle and
@@ -110,6 +114,9 @@ allocating new articles.
 - [[<topic>/index|Topic Title]] — one-line description of the topic cluster
 - ...
 ```
+
+The frontmatter block carries only `okf_version` — the bundle-root
+`index.md` is the one place OKF permits a format-version declaration.
 
 ### `Intelligence/<bundle>/<topic>/index.md` (topic router)
 
@@ -147,10 +154,17 @@ description: <one sentence — what this article is and its core thesis>
 bundle: <bundle-slug>
 topic: <topic-slug>
 tags: [tag, tag, …]
-source: <primary source path under Resources/, or self-authored>
-resource: <live URL of the origin when one exists, else omit/blank>
-timestamp: <ISO 8601 UTC of the last consolidate touch>
-status: active | needs-verification | deprecated
+resource: <live URL of the origin when one exists, else omit>
+sources:                               # provenance list (OKF v0.2); omit when self-authored
+  - id: <stable-slug-for-attribution>
+    resource: <source path under Resources/, URL, or scope descriptor>
+generated:                             # who/when last wrote this content (OKF v0.2)
+  by: <actor — see *Actor convention* below>   # REQUIRED within generated
+  at: <ISO 8601 UTC of the last consolidate touch>
+verified:                              # optional; one entry per verification event
+  - by: <actor>
+    at: <ISO 8601 UTC>
+status: draft | stable | deprecated    # absent ⇒ stable
 related:
   - <bundle>/<topic>/<article>.md      # repo-relative; MAY cross bundles (OKF graph)
   - …
@@ -186,10 +200,31 @@ same topic folder as the article — see *Image handling* below.
 
 **Required frontmatter key:** `type` (the only mandatory field, mirroring
 OKF). All other keys are recommended but optional; a missing `type`
-counts toward **schema-violations** drift. The body's `**Source:**` line
-and inline `(source: …)` citations are **retained** — the *Citation
-rules* are unchanged. `source`/`resource` duplicate provenance in a
-queryable field; the inline citations remain the per-claim record.
+counts toward **schema-violations** drift, as does frontmatter that
+fails a strict YAML parse (write scalars YAML-safe — quote anything
+containing `:`, leading symbols, or other ambiguous syntax). The body's
+`**Source:**` line and inline `(source: …)` citations are **retained** —
+the *Citation rules* are unchanged. `sources:`/`resource` duplicate
+provenance in a queryable field; the inline citations remain the
+per-claim record. The legacy v0.1 fields `timestamp:` (now
+`generated.at`) and `source:` (now `sources[].resource`) must not
+appear; `okf_tools.py --check` flags them.
+
+**Actor convention (OKF v0.2).** `generated.by` and `verified[].by`
+take one of three forms: `<producer>/<version>` for agents/tools,
+`human:<id>` for people, `process:<id>` for automated processes.
+Consumers derive a **trust tier** from `verified`: no `verified` key ⇒
+*unverified*; verified by non-`human:` actors only ⇒
+*machine-confirmed*; any `human:` verifier ⇒ *human-reviewed*.
+`verified` is written only on an explicit confirmation event, never
+speculatively; content edits do not carry `verified` forward unless
+re-confirmed.
+
+**Status semantics.** `stable` is the default (and the meaning of an
+absent `status`); `draft` marks not-yet-verified or thin content;
+`deprecated` keeps an article for links and history only. Inline
+`(source: needs-verification)` claim markers are a body-level citation
+convention and are unrelated to the `status` field.
 
 **Dual-link channel.** The `## Related` block keeps the Obsidian
 `[[wiki link]]` (same-bundle only, hard rule 2) **and** adds a
@@ -304,6 +339,21 @@ timestamp	verb	source	bundle	topic	articles_changed	images_copied	status	notes
 **Never use commas as separators.** Tabs only — commas appear in
 freeform `notes`.
 
+### Per-bundle `log.md` (derived)
+
+Each bundle root carries a `log.md` — the OKF-reserved changelog file,
+**derived from `log.tsv`** by `okf_tools.py --log <bundle>` (never
+hand-edited). Format:
+
+```markdown
+# Change log — <bundle>
+
+## YYYY-MM-DD
+- <verb> <topic>/ — <notes or "N article(s)">
+```
+
+Dates sorted newest-first; only `kept`/`quarantined` rows render.
+
 ---
 
 ## Eval results format — `Intelligence/_eval/results.tsv`
@@ -359,9 +409,12 @@ A single integer. Sum of:
   safety is preserved.
 - **Schema violations** — articles missing required sections
   (`Source:`, `Summary`, etc.), factual claims without
-  `(source: ...)` citations, or **a missing required `type` frontmatter
-  key**. (Other frontmatter keys are optional; an unrecognised `type`
-  value is not a violation.)
+  `(source: ...)` citations, **a missing required `type` frontmatter
+  key**, **frontmatter that fails a strict YAML parse**, **leftover
+  legacy v0.1 fields** (`timestamp:`/`source:` scalars), or a
+  malformed `generated`/`verified` shape (missing `by`). (Other
+  frontmatter keys are optional; an unrecognised `type` value is not
+  a violation.) `okf_tools.py --check` counts all of these.
 - **Episode integrity** — episodes in `Intelligence/_episodes/`
   missing required frontmatter or sections (see *Episodic memory
   contracts*), or any `[[wiki link]]` inside an episode that points
